@@ -14,6 +14,8 @@ import (
 	"lunabox/internal/common/vo"
 	"lunabox/internal/protocol"
 	"lunabox/internal/utils/apputils"
+	"lunabox/internal/utils/dbutils"
+	"lunabox/internal/utils/sessionend"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -51,6 +53,7 @@ var config *appconf.AppConfig
 
 var appState = newLifecycleState()
 var ipcHTTPServer *http.Server
+var sessionEndHook *sessionend.Hook
 
 type lifecycleState struct {
 	ctxMu sync.RWMutex
@@ -58,6 +61,7 @@ type lifecycleState struct {
 
 	forceQuit               atomic.Bool
 	shuttingDown            atomic.Bool
+	systemSessionEnding     atomic.Bool
 	quitRequestPending      atomic.Bool
 	frontendQuitSyncPlanned atomic.Bool
 	frontendQuitSyncRunning atomic.Bool
@@ -107,6 +111,27 @@ func (s *lifecycleState) ShouldForceQuit() bool {
 
 func (s *lifecycleState) BeginShutdown() {
 	s.shuttingDown.Store(true)
+}
+
+func (s *lifecycleState) MarkSystemSessionEnding() {
+	s.systemSessionEnding.Store(true)
+	s.forceQuit.Store(true)
+}
+
+func (s *lifecycleState) IsSystemSessionEnding() bool {
+	return s.systemSessionEnding.Load()
+}
+
+func (s *lifecycleState) QuitForSystemSessionEnd() {
+	s.MarkSystemSessionEnding()
+
+	ctx := s.Context()
+	if ctx == nil || s.shuttingDown.Load() {
+		return
+	}
+
+	s.RequestTrayQuit()
+	runtime.Quit(ctx)
 }
 
 func (s *lifecycleState) HasPendingQuitRequest() bool {
@@ -405,7 +430,7 @@ func main() {
 		appLogger.Fatal(err.Error())
 	}
 	dbPath := filepath.Join(execPath, "lunabox.db")
-	db, err = sql.Open("duckdb", dbPath)
+	db, err = dbutils.OpenDuckDBWithWALRecovery(context.Background(), dbPath, appLogger)
 	if err != nil {
 		appLogger.Fatal(err.Error())
 	}
@@ -524,6 +549,20 @@ func main() {
 		OnStartup: func(ctx context.Context) {
 			appState.SetContext(ctx)
 			applog.SetMode(applog.ModeGUI)
+			var sessionHookErr error
+			sessionEndHook, sessionHookErr = sessionend.Start(sessionend.Options{
+				Reason: "LunaBox 正在保存数据并退出",
+				OnQueryEndSession: func() {
+					appLogger.Warning("Windows session end requested; starting short shutdown")
+					appState.QuitForSystemSessionEnd()
+				},
+			})
+			if sessionHookErr != nil {
+				appLogger.Error("failed to start Windows session-end hook: " + sessionHookErr.Error())
+			} else {
+				appLogger.Info("Windows session-end hook started")
+			}
+
 			configService.Init(ctx, db, config)
 			configService.SetSuppressInitialWindowShow(launchedByAutostart)
 			configService.SetQuitHandler(func() {
@@ -633,10 +672,16 @@ func main() {
 		},
 		OnShutdown: func(ctx context.Context) {
 			appState.BeginShutdown()
+			isSystemSessionEnding := appState.IsSystemSessionEnding()
+			shutdownMode := "normal"
+			if isSystemSessionEnding {
+				shutdownMode = "system-session-ending"
+			}
 
 			cloudSyncService.StopScheduledSync()
 
 			shutdownStartedAt := time.Now()
+			appLogger.Info("shutdown mode: " + shutdownMode)
 			logShutdownStep := func(step string, fn func()) {
 				stepStartedAt := time.Now()
 				appLogger.Info("shutdown step started: " + step)
@@ -678,6 +723,10 @@ func main() {
 
 			logShutdownStep("automatic database backup", func() {
 				// 退出流程只做本地数据库备份，避免网络上传拖慢或阻塞应用退出。
+				if isSystemSessionEnding {
+					appLogger.Info("system session ending, skipping automatic database backup")
+					return
+				}
 				if !config.AutoBackupDB {
 					appLogger.Info("automatic database backup disabled, skipping")
 					return
@@ -703,9 +752,11 @@ func main() {
 			})
 
 			// 关闭数据库连接
-			logShutdownStep("close database connection", func() {
-				if err := db.Close(); err != nil {
-					appLogger.Error("failed to close database: " + err.Error())
+			logShutdownStep("checkpoint and close database connection", func() {
+				closeCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				defer cancel()
+				if err := dbutils.SafeCloseDuckDB(closeCtx, db, appLogger); err != nil {
+					appLogger.Error("database shutdown completed with error: " + err.Error())
 				}
 			})
 
@@ -713,6 +764,16 @@ func main() {
 			logShutdownStep("save final config", func() {
 				if err := appconf.SaveConfig(config); err != nil {
 					appLogger.Error("failed to save config: " + err.Error())
+				}
+			})
+
+			logShutdownStep("shutdown Windows session-end hook", func() {
+				if sessionEndHook == nil {
+					return
+				}
+				sessionEndHook.ReleaseShutdownBlockReason()
+				if err := sessionEndHook.Stop(); err != nil {
+					appLogger.Error("failed to shutdown Windows session-end hook: " + err.Error())
 				}
 			})
 
