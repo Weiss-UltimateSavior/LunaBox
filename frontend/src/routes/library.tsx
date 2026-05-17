@@ -266,6 +266,19 @@ function LibraryPage() {
       });
   }, [games, searchQuery, sortBy, sortOrder, statusFilter, tagGameIds]);
 
+  const statusFilterLabel = statusFilter
+    ? t(
+        statusOptions.find(option => option.value === statusFilter)?.label
+        || "",
+      )
+    : "";
+  const gameCountText = statusFilterLabel
+    ? t("category.filteredGameCount", {
+        count: filteredGames.length,
+        status: statusFilterLabel,
+      })
+    : t("category.gameCount", { count: filteredGames.length });
+
   const selectedGameIdSet = useMemo(
     () => new Set(selectedGameIds),
     [selectedGameIds],
@@ -430,7 +443,7 @@ function LibraryPage() {
           {t("library.title")}
         </h1>
         <p className="text-brand-500 dark:text-brand-400 mt-2">
-          {t("category.gameCount", { count: filteredGames.length })}
+          {gameCountText}
         </p>
       </div>
 

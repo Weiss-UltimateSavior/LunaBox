@@ -1122,6 +1122,7 @@
     "back": "返回",
     "systemTag": "系统",
     "gameCount": "共 {{count}} 个游戏",
+    "filteredGameCount": "共 {{count}} 个 {{status}} 游戏",
     "batchRemoveBtn": "批量移除",
     "addGameBtn": "添加游戏",
     "removeFromCategory": "从收藏夹移除",

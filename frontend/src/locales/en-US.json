@@ -1122,6 +1122,7 @@
     "back": "Back",
     "systemTag": "System",
     "gameCount": "{{count}} games",
+    "filteredGameCount": "{{count}} {{status}} games",
     "batchRemoveBtn": "Batch Remove",
     "addGameBtn": "Add Game",
     "removeFromCategory": "Remove from Collection",
