@@ -114,6 +114,8 @@ function LibraryPage() {
   const [total, setTotal] = useState(0);
   const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [hasLoadedGames, setHasLoadedGames] = useState(false);
+  const [loadedQueryKey, setLoadedQueryKey] = useState("");
   const [loadingMore, setLoadingMore] = useState(false);
   const requestIdRef = useRef(0);
   const [isAddGameModalOpen, setIsAddGameModalOpen] = useState(false);
@@ -243,6 +245,15 @@ function LibraryPage() {
     }),
     [debouncedSearchQuery, selectedTags, sortBy, sortOrder, statusFilter],
   );
+  const queryKey = useMemo(() => JSON.stringify(queryParams), [queryParams]);
+  const isSearchSettling = searchQuery.trim() !== debouncedSearchQuery.trim();
+  const hasActiveGameFilters
+    = debouncedSearchQuery.trim().length > 0
+      || selectedTags.length > 0
+      || Boolean(statusFilter);
+  const isEmptyListWaiting
+    = games.length === 0
+      && (loading || isSearchSettling || loadedQueryKey !== queryKey);
 
   const loadGamesPage = useCallback(
     async (offset: number, mode: "replace" | "append") => {
@@ -281,10 +292,12 @@ function LibraryPage() {
         if (requestId === requestIdRef.current) {
           setLoading(false);
           setLoadingMore(false);
+          setHasLoadedGames(true);
+          setLoadedQueryKey(queryKey);
         }
       }
     },
-    [queryParams, t],
+    [queryKey, queryParams, t],
   );
 
   const fetchFirstPage = useCallback(() => {
@@ -460,7 +473,7 @@ function LibraryPage() {
     setSelectedGameIds([]);
   }, [fetchFirstPage]);
 
-  if (loading && games.length === 0) {
+  if (!hasLoadedGames && loading && games.length === 0) {
     if (!showSkeleton) {
       return null;
     }
@@ -636,42 +649,53 @@ function LibraryPage() {
           />
         </div>
 
-        {games.length === 0 ? (
-          <div className="flex-1 flex items-center justify-center w-full">
-            <div className="flex flex-col items-center justify-center py-20 text-brand-500 dark:text-brand-400">
-              <div className="i-mdi-gamepad-variant-outline text-6xl mb-4" />
-              <p className="text-xl">{t("library.emptyState")}</p>
-              <p className="text-sm mt-2">{t("library.emptyStateAction")}</p>
-              <div className="flex flex-col gap-3 mt-4">
-                <button
-                  type="button"
-                  onClick={() => setImportSource("potatovn")}
-                  className="rounded-lg border border-success-600 px-5 py-2.5 text-sm font-medium text-success-600 hover:bg-success-50 focus:outline-none focus:ring-4 focus:ring-success-300 dark:border-success-500 dark:text-success-500 dark:hover:bg-success-900/20"
-                >
-                  {t("library.importPotatoVN")}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setImportSource("playnite")}
-                  className="rounded-lg border border-purple-600 px-5 py-2.5 text-sm font-medium text-purple-600 hover:bg-purple-50 focus:outline-none focus:ring-4 focus:ring-purple-300 dark:border-purple-500 dark:text-purple-500 dark:hover:bg-purple-900/20"
-                >
-                  {t("library.importPlaynite")}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setImportSource("vnite")}
-                  className="rounded-lg border border-sky-600 px-5 py-2.5 text-sm font-medium text-sky-600 hover:bg-sky-50 focus:outline-none focus:ring-4 focus:ring-sky-300 dark:border-sky-500 dark:text-sky-500 dark:hover:bg-sky-900/20"
-                >
-                  {t("library.importVnite")}
-                </button>
-              </div>
+        {isEmptyListWaiting ? (
+          <div className="flex-1 flex items-center justify-center w-full text-brand-500 dark:text-brand-400">
+            <div className="flex flex-col items-center">
+              <div className="i-mdi-loading animate-spin text-4xl mb-2" />
+              <p>{t("common.loading", "加载中...")}</p>
             </div>
           </div>
         ) : games.length === 0 ? (
-          <div className="flex-1 flex items-center justify-center w-full text-brand-500 dark:text-brand-400">
-            <div className="flex flex-col items-center">
-              <div className="i-mdi-magnify text-4xl mb-2" />
-              <p>{t("library.notFound")}</p>
+          <div className="flex-1 flex items-center justify-center w-full">
+            <div className="flex flex-col items-center justify-center py-20 text-brand-500 dark:text-brand-400">
+              {hasActiveGameFilters ? (
+                <>
+                  <div className="i-mdi-magnify text-6xl mb-4" />
+                  <p className="text-xl">{t("library.notFound")}</p>
+                </>
+              ) : (
+                <>
+                  <div className="i-mdi-gamepad-variant-outline text-6xl mb-4" />
+                  <p className="text-xl">{t("library.emptyState")}</p>
+                  <p className="text-sm mt-2">
+                    {t("library.emptyStateAction")}
+                  </p>
+                  <div className="flex flex-col gap-3 mt-4">
+                    <button
+                      type="button"
+                      onClick={() => setImportSource("potatovn")}
+                      className="rounded-lg border border-success-600 px-5 py-2.5 text-sm font-medium text-success-600 hover:bg-success-50 focus:outline-none focus:ring-4 focus:ring-success-300 dark:border-success-500 dark:text-success-500 dark:hover:bg-success-900/20"
+                    >
+                      {t("library.importPotatoVN")}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setImportSource("playnite")}
+                      className="rounded-lg border border-purple-600 px-5 py-2.5 text-sm font-medium text-purple-600 hover:bg-purple-50 focus:outline-none focus:ring-4 focus:ring-purple-300 dark:border-purple-500 dark:text-purple-500 dark:hover:bg-purple-900/20"
+                    >
+                      {t("library.importPlaynite")}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setImportSource("vnite")}
+                      className="rounded-lg border border-sky-600 px-5 py-2.5 text-sm font-medium text-sky-600 hover:bg-sky-50 focus:outline-none focus:ring-4 focus:ring-sky-300 dark:border-sky-500 dark:text-sky-500 dark:hover:bg-sky-900/20"
+                    >
+                      {t("library.importVnite")}
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         ) : (

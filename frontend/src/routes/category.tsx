@@ -98,6 +98,8 @@ function CategoryDetailPage() {
   const [loadingMore, setLoadingMore] = useState(false);
   const requestIdRef = useRef(0);
   const [loading, setLoading] = useState(true);
+  const [hasLoadedGames, setHasLoadedGames] = useState(false);
+  const [loadedQueryKey, setLoadedQueryKey] = useState("");
   const [showSkeleton, setShowSkeleton] = useState(false);
   const [isAddGameModalOpen, setIsAddGameModalOpen] = useState(false);
   const [allGames, setAllGames] = useState<models.Game[]>([]);
@@ -175,6 +177,18 @@ function CategoryDetailPage() {
     }),
     [debouncedSearchQuery, selectedTags, sortBy, sortOrder, statusFilter],
   );
+  const queryKey = useMemo(
+    () => JSON.stringify({ categoryId, ...queryParams }),
+    [categoryId, queryParams],
+  );
+  const isSearchSettling = searchQuery.trim() !== debouncedSearchQuery.trim();
+  const hasActiveGameFilters
+    = debouncedSearchQuery.trim().length > 0
+      || selectedTags.length > 0
+      || Boolean(statusFilter);
+  const isEmptyListWaiting
+    = games.length === 0
+      && (loading || isSearchSettling || loadedQueryKey !== queryKey);
 
   const loadGames = useCallback(
     async (id: string, offset = 0, mode: "replace" | "append" = "replace") => {
@@ -214,10 +228,12 @@ function CategoryDetailPage() {
         if (requestId === requestIdRef.current) {
           setLoading(false);
           setLoadingMore(false);
+          setHasLoadedGames(true);
+          setLoadedQueryKey(queryKey);
         }
       }
     },
-    [queryParams, t],
+    [queryKey, queryParams, t],
   );
 
   const loadNextGames = useCallback(() => {
@@ -393,7 +409,7 @@ function CategoryDetailPage() {
     }
   }, [isAddGameModalOpen, loadCandidates]);
 
-  if (loading && !category) {
+  if (!hasLoadedGames && loading && !category) {
     if (!showSkeleton) {
       return null;
     }
@@ -518,7 +534,12 @@ function CategoryDetailPage() {
       </div>
 
       <div className="mt-6">
-        {games.length > 0 ? (
+        {isEmptyListWaiting ? (
+          <div className="flex flex-col items-center justify-center h-64 text-brand-500 dark:text-brand-400">
+            <div className="i-mdi-loading animate-spin text-6xl mb-4" />
+            <p className="text-lg">{t("common.loading", "加载中...")}</p>
+          </div>
+        ) : games.length > 0 ? (
           <div className="relative">
             <div
               className={`transition-opacity duration-200 ${
@@ -564,7 +585,7 @@ function CategoryDetailPage() {
               </div>
             )}
           </div>
-        ) : total > 0 ? (
+        ) : hasActiveGameFilters ? (
           <div className="flex flex-col items-center justify-center h-64 text-brand-500 dark:text-brand-400">
             <div className="i-mdi-magnify text-6xl mb-4" />
             <p className="text-lg">{t("category.noMatchingGames")}</p>
