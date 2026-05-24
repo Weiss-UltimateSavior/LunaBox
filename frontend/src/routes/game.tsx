@@ -396,8 +396,8 @@ function GameDetailPage() {
       </button>
 
       {/* Header Section */}
-      <div className="flex gap-6 items-center">
-        <div className="relative w-60 flex-shrink-0 rounded-lg overflow-hidden shadow-lg bg-brand-200 dark:bg-brand-800">
+      <div className="grid min-w-0 grid-cols-[15rem_minmax(0,1fr)] items-center gap-6">
+        <div className="relative w-60 rounded-lg overflow-hidden shadow-lg bg-brand-200 dark:bg-brand-800">
           {game.cover_url ? (
             <img
               src={game.cover_url}
@@ -414,13 +414,13 @@ function GameDetailPage() {
           )}
         </div>
 
-        <div className="flex-1 space-y-4">
+        <div className="min-w-0 flex-1 space-y-4">
           <div className="flex flex-col gap-3">
-            <h1 className="text-4xl font-bold text-brand-900 dark:text-white">
+            <h1 className="break-words text-4xl font-bold text-brand-900 dark:text-white">
               {game.name}
             </h1>
             {/* 操作和状态标签组 */}
-            <div className="flex items-center gap-4">
+            <div className="flex flex-wrap items-center gap-4">
               <button
                 type="button"
                 onClick={handleStartGame}
@@ -432,7 +432,7 @@ function GameDetailPage() {
               <div className="h-6 w-px bg-brand-200 dark:bg-brand-700" />
               {" "}
               {/* 分隔线 */}
-              <div className="flex gap-1.5">
+              <div className="flex flex-wrap gap-1.5">
                 {Object.entries(statusConfig).map(([key, config]) => {
                   const isActive
                     = (game.status || enums.GameStatus.NOT_STARTED) === key;
@@ -457,12 +457,12 @@ function GameDetailPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 text-sm text-brand-750 dark:text-brand-400">
-            <div>
+          <div className="grid min-w-0 grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 text-sm text-brand-750 dark:text-brand-400">
+            <div className="min-w-0">
               <div className="font-semibold mb-1">{t("game.dataSource")}</div>
-              <div>{game.source_type}</div>
+              <div className="break-words">{game.source_type}</div>
             </div>
-            <div>
+            <div className="min-w-0">
               <div className="font-semibold mb-1">{t("game.developer")}</div>
               {game.company?.trim() ? (
                 <button
@@ -488,22 +488,22 @@ function GameDetailPage() {
               <div className="font-semibold mb-1">{t("game.rating")}</div>
               <div>{ratingText}</div>
             </div>
-            <div>
+            <div className="min-w-0">
               <div className="font-semibold mb-1">{t("game.releaseDate")}</div>
-              <div>{releaseDateText}</div>
+              <div className="break-words">{releaseDateText}</div>
             </div>
           </div>
 
-          <div className="mt-4">
+          <div className="mt-4 min-w-0">
             <div className="font-semibold mb-2 text-brand-900 dark:text-white">
               {t("game.summary")}
             </div>
-            <p className="text-brand-750 dark:text-brand-400 text-sm leading-relaxed whitespace-pre-wrap max-h-60 overflow-y-auto scrollbar-hide pr-2">
+            <p className="max-w-full break-words text-brand-750 dark:text-brand-400 text-sm leading-relaxed whitespace-pre-wrap max-h-60 overflow-y-auto overflow-x-hidden scrollbar-hide pr-2 [overflow-wrap:anywhere]">
               {game.summary || t("game.noSummary")}
             </p>
           </div>
 
-          <div className="mt-3">
+          <div className="mt-3 min-w-0">
             <GameTags
               gameId={gameId}
               showNSFW={config?.show_nsfw_tags}
