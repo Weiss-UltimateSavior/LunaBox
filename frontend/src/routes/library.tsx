@@ -708,6 +708,7 @@ function LibraryPage() {
               <VirtualGameGrid
                 games={games}
                 scrollRestorationId={LIBRARY_SCROLL_RESTORATION_ID}
+                totalItems={total}
                 searchQuery={debouncedSearchQuery}
                 selectionMode={batchMode}
                 selectedGameIds={selectedGameIdSet}

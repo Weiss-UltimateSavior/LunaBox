@@ -549,6 +549,7 @@ function CategoryDetailPage() {
               <VirtualGameGrid
                 games={games}
                 scrollRestorationId={scrollRestorationId}
+                totalItems={total}
                 searchQuery={debouncedSearchQuery}
                 selectionMode={batchMode}
                 selectedGameIds={selectedGameIdSet}
