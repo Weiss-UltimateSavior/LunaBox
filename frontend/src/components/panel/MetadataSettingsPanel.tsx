@@ -166,7 +166,7 @@ export function MetadataSettingsPanel({
           </div>
         </div>
 
-        <div className="space-y-3">
+        <div className="grid grid-cols-2 gap-3">
           {sourceItems.map(item => (
             <div
               key={item.value}
