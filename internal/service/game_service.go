@@ -925,12 +925,18 @@ func (s *GameService) UpdateGameFromRemote(gameID string) error {
 		return fmt.Errorf("failed to get game: %w", err)
 	}
 
-	if existingGame.SourceType == "" || existingGame.SourceID == "" {
+	sourceType := normalizeMetadataSourceType(existingGame.SourceType)
+	sourceID := strings.TrimSpace(existingGame.SourceID)
+	if sourceType == "" || sourceType == enums2.Local || sourceID == "" {
 		return fmt.Errorf("游戏缺少数据源信息，无法从远程更新")
 	}
 
-	sourceId := strings.ToLower(existingGame.SourceID)
-	metaResult, err := s.fetchMetadataResultBySource(existingGame.SourceType, sourceId)
+	if !s.isMetadataSourceEnabled(sourceType) {
+		return fmt.Errorf("元数据源 %s 未启用，无法更新游戏元数据", sourceType)
+	}
+
+	sourceId := strings.ToLower(sourceID)
+	metaResult, err := s.fetchMetadataResultBySource(sourceType, sourceId)
 	if err != nil {
 		return fmt.Errorf("failed to fetch metadata from remote: %w", err)
 	}
@@ -961,7 +967,7 @@ func (s *GameService) UpdateGameFromRemote(gameID string) error {
 		}
 	}
 
-	applog.LogInfof(s.ctx, "UpdateGameFromRemote: successfully updated game %s from %s", existingGame.Name, existingGame.SourceType)
+	applog.LogInfof(s.ctx, "UpdateGameFromRemote: successfully updated game %s from %s", existingGame.Name, sourceType)
 	return nil
 }
 
@@ -982,7 +988,7 @@ func (s *GameService) RefreshAllGamesMetadata() (vo.MetadataRefreshResult, error
 			continue
 		}
 
-		if _, enabled := enabledSources[game.SourceType]; !enabled {
+		if _, enabled := enabledSources[normalizeMetadataSourceType(game.SourceType)]; !enabled {
 			result.SkippedGames++
 			continue
 		}
@@ -1363,7 +1369,7 @@ func (s *GameService) getConfiguredMetadataSources() []enums2.SourceType {
 	result := make([]enums2.SourceType, 0, len(s.config.MetadataSources))
 	seen := make(map[enums2.SourceType]struct{}, len(s.config.MetadataSources))
 	for _, source := range s.config.MetadataSources {
-		normalized := enums2.SourceType(strings.ToLower(strings.TrimSpace(source)))
+		normalized := normalizeMetadataSourceType(enums2.SourceType(source))
 		switch normalized {
 		case enums2.Bangumi, enums2.VNDB, enums2.Ymgal, enums2.Steam, enums2.DLsite, enums2.ErogameScape:
 			if _, exists := seen[normalized]; exists {
@@ -1386,4 +1392,18 @@ func (s *GameService) getConfiguredMetadataSourceSet() map[enums2.SourceType]str
 		sourceSet[source] = struct{}{}
 	}
 	return sourceSet
+}
+
+func (s *GameService) isMetadataSourceEnabled(source enums2.SourceType) bool {
+	source = normalizeMetadataSourceType(source)
+	if source == "" || source == enums2.Local {
+		return false
+	}
+
+	_, enabled := s.getConfiguredMetadataSourceSet()[source]
+	return enabled
+}
+
+func normalizeMetadataSourceType(source enums2.SourceType) enums2.SourceType {
+	return enums2.SourceType(strings.ToLower(strings.TrimSpace(string(source))))
 }

@@ -46,6 +46,25 @@ func TestGameServiceConfiguredMetadataSearchSourcesIncludesOptInSources(t *testi
 	}
 }
 
+func TestGameServiceMetadataSourceEnabledUsesConfiguredSources(t *testing.T) {
+	svc := NewGameService()
+	svc.Init(context.Background(), nil, &appconf.AppConfig{
+		MetadataSources: []string{" Steam "},
+	})
+
+	if !svc.isMetadataSourceEnabled(enums.Steam) {
+		t.Fatal("expected configured Steam source to be enabled")
+	}
+
+	if svc.isMetadataSourceEnabled(enums.VNDB) {
+		t.Fatal("expected VNDB source to be disabled")
+	}
+
+	if svc.isMetadataSourceEnabled(enums.Local) {
+		t.Fatal("expected local source to be disabled for metadata refresh")
+	}
+}
+
 func TestGameServiceFetchMetadataResultByRequestRejectsInvalidOptInSourceIDs(t *testing.T) {
 	svc := NewGameService()
 	svc.Init(context.Background(), nil, &appconf.AppConfig{})
