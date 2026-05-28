@@ -1,10 +1,12 @@
 import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { getTagDisplayName, getTagTitle } from "../../utils/tagTranslation";
 
 interface TagFilterMenuProps {
   selectedTags: string[];
   tagInput: string;
   tagSuggestions: string[];
+  enableTagTranslation?: boolean;
   onTagInputChange: (value: string) => void;
   onSelectTag: (tagName: string) => void;
   onRemoveTag: (tagName: string) => void;
@@ -15,6 +17,7 @@ export function TagFilterMenu({
   selectedTags,
   tagInput,
   tagSuggestions,
+  enableTagTranslation = true,
   onTagInputChange,
   onSelectTag,
   onRemoveTag,
@@ -38,8 +41,12 @@ export function TagFilterMenu({
       >
         <div className="i-mdi-tag-outline text-base text-brand-500 dark:text-brand-400 shrink-0" />
         {selectedTags.map(tag => (
-          <span key={tag} className="inline-flex max-w-full items-center gap-1 break-all rounded bg-brand-100 px-1.5 py-0.5 text-xs text-brand-700 dark:bg-brand-800 dark:text-brand-200">
-            {tag}
+          <span
+            key={tag}
+            title={getTagTitle(tag, enableTagTranslation)}
+            className="inline-flex max-w-full items-center gap-1 break-all rounded bg-brand-100 px-1.5 py-0.5 text-xs text-brand-700 dark:bg-brand-800 dark:text-brand-200"
+          >
+            {getTagDisplayName(tag, enableTagTranslation)}
             <button
               type="button"
               onClick={(event) => {
@@ -64,11 +71,17 @@ export function TagFilterMenu({
                 setTimeout(() => setIsTagInputFocused(false), 200);
               }}
               onKeyDown={(event) => {
-                if (event.key === "Backspace" && !tagInput && selectedTags.length > 0) {
+                if (
+                  event.key === "Backspace"
+                  && !tagInput
+                  && selectedTags.length > 0
+                ) {
                   onRemoveTag(selectedTags[selectedTags.length - 1]);
                 }
               }}
-              placeholder={selectedTags.length ? "" : t("filterBar.tagsPlaceholder")}
+              placeholder={
+                selectedTags.length ? "" : t("filterBar.tagsPlaceholder")
+              }
               className="min-w-0 w-full bg-transparent text-xs text-brand-900 outline-none placeholder:text-brand-400 dark:text-white"
             />
           </div>
@@ -94,9 +107,10 @@ export function TagFilterMenu({
               key={tagName}
               type="button"
               onClick={() => onSelectTag(tagName)}
+              title={getTagTitle(tagName, enableTagTranslation)}
               className="w-full rounded-md px-2.5 py-1.5 text-left text-xs text-brand-700 transition-colors hover:bg-brand-100 dark:text-brand-200 dark:hover:bg-brand-700"
             >
-              {tagName}
+              {getTagDisplayName(tagName, enableTagTranslation)}
             </button>
           ))}
         </div>

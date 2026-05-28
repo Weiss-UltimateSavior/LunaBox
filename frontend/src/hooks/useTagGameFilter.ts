@@ -4,17 +4,23 @@ import {
   GetGameIDsByTag,
   SearchTagsInLibrary,
 } from "../../wailsjs/go/service/TagService";
+import {
+  filterTagNamesByDisplayQuery,
+  findRawTagNamesByTranslatedQuery,
+} from "../utils/tagTranslation";
 
 type SelectTagOptions = {
   manual?: boolean;
 };
 
 type UseTagGameFilterOptions = {
+  enableTagTranslation?: boolean;
   initialSelectedTags?: string[];
   onManualTagChange?: () => void;
 };
 
 export function useTagGameFilter({
+  enableTagTranslation = true,
   initialSelectedTags = [],
   onManualTagChange,
 }: UseTagGameFilterOptions = {}) {
@@ -32,16 +38,25 @@ export function useTagGameFilter({
     }
     SearchTagsInLibrary(tagInput)
       .then((names) => {
+        const rawNames = Array.isArray(names) ? names : [];
+        const translatedMatches = enableTagTranslation
+          ? findRawTagNamesByTranslatedQuery(tagInput)
+          : [];
+        const mergedNames = [...new Set([...rawNames, ...translatedMatches])];
         setTagSuggestions(
-          Array.isArray(names)
-            ? names.filter(name => !selectedTags.includes(name))
-            : [],
+          filterTagNamesByDisplayQuery(
+            mergedNames,
+            tagInput,
+            enableTagTranslation,
+          )
+            .filter(name => !selectedTags.includes(name))
+            .slice(0, 50),
         );
       })
       .catch(() => {
         setTagSuggestions([]);
       });
-  }, [tagInput, selectedTags]);
+  }, [enableTagTranslation, tagInput, selectedTags]);
 
   const updateTagGameIds = useCallback(async (tags: string[]) => {
     if (tags.length === 0) {

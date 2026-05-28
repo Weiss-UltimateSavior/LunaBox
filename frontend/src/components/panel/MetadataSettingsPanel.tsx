@@ -226,6 +226,31 @@ export function MetadataSettingsPanel({
             />
           </div>
         </div>
+
+        <div className="space-y-2">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex-1 space-y-2">
+              <label
+                htmlFor="enable-tag-translation"
+                className="block cursor-pointer text-sm font-medium text-brand-700 dark:text-brand-300"
+              >
+                {t("settings.metadata.enableTagTranslation")}
+              </label>
+              <p className="text-xs text-brand-500 dark:text-brand-400">
+                {t("settings.metadata.enableTagTranslationHint")}
+              </p>
+            </div>
+            <BetterSwitch
+              id="enable-tag-translation"
+              checked={formData.enable_tag_translation !== false}
+              onCheckedChange={checked =>
+                onChange({
+                  ...formData,
+                  enable_tag_translation: checked,
+                } as appconf.AppConfig)}
+            />
+          </div>
+        </div>
       </div>
 
       <div className="mt-6 border-brand-200 pt-6 dark:border-brand-700">

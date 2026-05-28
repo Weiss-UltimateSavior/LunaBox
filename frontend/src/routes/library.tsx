@@ -30,6 +30,7 @@ import { sortOptions, statusOptions } from "../consts/options";
 import { useDebouncedValue } from "../hooks/useDebouncedValue";
 import { usePageScrollControls } from "../hooks/usePageScrollControls";
 import { useTagGameFilter } from "../hooks/useTagGameFilter";
+import { useAppStore } from "../store";
 import { Route as rootRoute } from "./__root";
 
 interface LibrarySearch {
@@ -154,6 +155,7 @@ function LibraryPage() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [hasLoadedGames, setHasLoadedGames] = useState(false);
+  const [hasShownMainContent, setHasShownMainContent] = useState(false);
   const [loadedQueryKey, setLoadedQueryKey] = useState("");
   const [loadingMore, setLoadingMore] = useState(false);
   const currentQueryKeyRef = useRef("");
@@ -182,6 +184,9 @@ function LibraryPage() {
   const debouncedSearchQuery = useDebouncedValue(searchQuery, 250);
   const [batchMode, setBatchMode] = useState(false);
   const [selectedGameIds, setSelectedGameIds] = useState<string[]>([]);
+  const enableTagTranslation = useAppStore(
+    state => state.config?.enable_tag_translation ?? true,
+  );
   const [allCategories, setAllCategories] = useState<vo.CategoryVO[]>([]);
   const [isBatchCategoryModalOpen, setIsBatchCategoryModalOpen]
     = useState(false);
@@ -226,6 +231,12 @@ function LibraryPage() {
     return () => clearTimeout(timer);
   }, [loading]);
 
+  useEffect(() => {
+    if (!loading || hasLoadedGames || total > 0) {
+      setHasShownMainContent(true);
+    }
+  }, [hasLoadedGames, loading, total]);
+
   const clearRouteTagFilter = useCallback(() => {
     if (!routeTagFilter) {
       return;
@@ -267,6 +278,7 @@ function LibraryPage() {
     removeTag,
     clearTagFilter,
   } = useTagGameFilter({
+    enableTagTranslation,
     onManualTagChange: clearRouteTagFilter,
   });
   const isPageReady = !(loading && total === 0 && loadedGameCount === 0);
@@ -622,7 +634,7 @@ function LibraryPage() {
     currentQueryKeyRef.current = queryKey;
   }, [queryKey]);
 
-  if (!hasLoadedGames && loading && total === 0) {
+  if (!hasShownMainContent && !hasLoadedGames && loading && total === 0) {
     if (!showSkeleton) {
       return null;
     }
@@ -677,6 +689,7 @@ function LibraryPage() {
                 selectedTags={selectedTags}
                 tagInput={tagInput}
                 tagSuggestions={tagSuggestions}
+                enableTagTranslation={enableTagTranslation}
                 onTagInputChange={setTagInput}
                 onSelectTag={selectTag}
                 onRemoveTag={removeTag}

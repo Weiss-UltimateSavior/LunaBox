@@ -23,6 +23,7 @@ import { sortOptions, statusOptions } from "../consts/options";
 import { useDebouncedValue } from "../hooks/useDebouncedValue";
 import { usePageScrollControls } from "../hooks/usePageScrollControls";
 import { useTagGameFilter } from "../hooks/useTagGameFilter";
+import { useAppStore } from "../store";
 import { Route as rootRoute } from "./__root";
 
 const CATEGORY_STORAGE_KEY = "category";
@@ -133,6 +134,7 @@ function CategoryDetailPage() {
   const toolbarRef = useRef<HTMLDivElement | null>(null);
   const { t } = useTranslation();
   const [category, setCategory] = useState<vo.CategoryVO | null>(null);
+  const loadedCategoryIdRef = useRef<string | null>(null);
   const [gamesByIndex, setGamesByIndex] = useState<Map<number, models.Game>>(
     () => new Map(),
   );
@@ -174,6 +176,9 @@ function CategoryDetailPage() {
   );
   const [batchMode, setBatchMode] = useState(false);
   const [selectedGameIds, setSelectedGameIds] = useState<string[]>([]);
+  const enableTagTranslation = useAppStore(
+    state => state.config?.enable_tag_translation ?? true,
+  );
   const {
     selectedTags,
     tagInput,
@@ -182,7 +187,7 @@ function CategoryDetailPage() {
     selectTag,
     removeTag,
     clearTagFilter,
-  } = useTagGameFilter();
+  } = useTagGameFilter({ enableTagTranslation });
   const loadedGames = useMemo(
     () => Array.from(gamesByIndex.values()),
     [gamesByIndex],
@@ -221,6 +226,7 @@ function CategoryDetailPage() {
     try {
       const result = await GetCategoryByID(id);
       setCategory(result);
+      loadedCategoryIdRef.current = id;
     }
     catch (error) {
       console.error("Failed to load category:", error);
@@ -532,28 +538,37 @@ function CategoryDetailPage() {
   useEffect(() => {
     if (categoryId) {
       const init = async () => {
+        const shouldLoadCategory = loadedCategoryIdRef.current !== categoryId;
         currentQueryKeyRef.current = queryKey;
         loadingWindowsRef.current.clear();
-        setCategory(null);
+        if (shouldLoadCategory) {
+          setCategory(null);
+        }
         setGamesByIndex(new Map());
         setVisibleRange(null);
         setBatchMode(false);
         setSelectedGameIds([]);
-        setLoading(true);
+        if (shouldLoadCategory) {
+          setLoading(true);
+        }
         setLoadingMore(false);
 
         const cached = categoryGameListMetaCache.get(queryKey);
         if (cached) {
           setTotal(cached.total);
           setLoadedQueryKey(queryKey);
-          await loadCategory(categoryId);
+          if (shouldLoadCategory) {
+            await loadCategory(categoryId);
+          }
           setLoading(false);
           return;
         }
 
         setTotal(0);
         setLoadedQueryKey("");
-        await loadCategory(categoryId);
+        if (shouldLoadCategory) {
+          await loadCategory(categoryId);
+        }
         await loadGamesWindow(categoryId, 0, PAGE_SIZE, {
           force: true,
           reset: true,
@@ -663,6 +678,7 @@ function CategoryDetailPage() {
                 selectedTags={selectedTags}
                 tagInput={tagInput}
                 tagSuggestions={tagSuggestions}
+                enableTagTranslation={enableTagTranslation}
                 onTagInputChange={setTagInput}
                 onSelectTag={selectTag}
                 onRemoveTag={removeTag}

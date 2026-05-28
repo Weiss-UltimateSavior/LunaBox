@@ -8,6 +8,8 @@ import {
   DeleteTag,
   GetTagsByGame,
 } from "../../../wailsjs/go/service/TagService";
+import { useAppStore } from "../../store";
+import { getTagDisplayName, getTagTitle } from "../../utils/tagTranslation";
 
 interface GameTagsProps {
   gameId: string;
@@ -22,6 +24,9 @@ export function GameTags({
 }: GameTagsProps) {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const enableTagTranslation = useAppStore(
+    state => state.config?.enable_tag_translation ?? true,
+  );
   const [tags, setTags] = useState<models.GameTag[]>([]);
   const [isAdding, setIsAdding] = useState(false);
   const [inputValue, setInputValue] = useState("");
@@ -97,6 +102,7 @@ export function GameTags({
         <TagPill
           key={tag.id}
           tag={tag}
+          enableTranslation={enableTagTranslation}
           onClick={() => handleTagClick(tag.name)}
           onDelete={() => handleDeleteTag(tag)}
         />
@@ -136,11 +142,12 @@ export function GameTags({
 
 interface TagPillProps {
   tag: models.GameTag;
+  enableTranslation: boolean;
   onClick: () => void;
   onDelete?: () => void;
 }
 
-function TagPill({ tag, onClick, onDelete }: TagPillProps) {
+function TagPill({ tag, enableTranslation, onClick, onDelete }: TagPillProps) {
   const { t } = useTranslation();
   const [revealed, setRevealed] = useState(false);
   const isSpoiler = tag.is_spoiler && !revealed;
@@ -150,6 +157,8 @@ function TagPill({ tag, onClick, onDelete }: TagPillProps) {
     : "border border-brand-200/90 bg-brand-50/70 text-brand-700 dark:border-brand-700/80 dark:bg-brand-800/55 dark:text-brand-200";
   const textButtonClass
     = "max-w-full truncate rounded-full px-0.5 transition-colors duration-200";
+  const displayName = getTagDisplayName(tag.name, enableTranslation);
+  const title = getTagTitle(tag.name, enableTranslation);
 
   return (
     <span
@@ -160,17 +169,22 @@ function TagPill({ tag, onClick, onDelete }: TagPillProps) {
           type="button"
           onClick={() => setRevealed(true)}
           className={`${textButtonClass} cursor-pointer select-none blur-sm hover:text-brand-900 hover:blur-none dark:hover:text-white`}
-          title={t("tags.revealSpoiler")}
+          title={
+            title
+              ? `${t("tags.revealSpoiler")} - ${title}`
+              : t("tags.revealSpoiler")
+          }
         >
-          {tag.name}
+          {displayName}
         </button>
       ) : (
         <button
           type="button"
           onClick={onClick}
           className={`${textButtonClass} cursor-pointer hover:text-brand-900 dark:hover:text-white`}
+          title={title}
         >
-          {tag.name}
+          {displayName}
         </button>
       )}
       {onDelete && (

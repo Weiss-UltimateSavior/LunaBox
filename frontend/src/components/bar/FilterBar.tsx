@@ -1,5 +1,5 @@
 import { Menu, MenuButton, MenuItems } from "@headlessui/react";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { enums } from "../../../wailsjs/go/models";
 
@@ -69,12 +69,22 @@ export function FilterBar({
   batchActions,
 }: FilterBarProps) {
   const [initialized, setInitialized] = useState(false);
+  const [draftSearchQuery, setDraftSearchQuery] = useState(searchQuery);
+  const isComposingRef = useRef(false);
+  const committedSearchQueryRef = useRef(searchQuery);
   const { t } = useTranslation();
 
   const finalSearchPlaceholder
     = searchPlaceholder || `${t("common.search")}...`;
   const activeFilterCount
     = (statusFilter ? 1 : 0) + (filterMenuExtraActive ? 1 : 0);
+
+  useEffect(() => {
+    committedSearchQueryRef.current = searchQuery;
+    if (!isComposingRef.current) {
+      setDraftSearchQuery(searchQuery);
+    }
+  }, [searchQuery]);
 
   // 初始化时从 localStorage 恢复所有设置
   useEffect(() => {
@@ -129,8 +139,11 @@ export function FilterBar({
   ]);
 
   // 处理搜索查询变更
-  const handleSearchChange = (value: string) => {
-    onSearchChange(value);
+  const commitSearchChange = (value: string) => {
+    if (committedSearchQueryRef.current !== value) {
+      committedSearchQueryRef.current = value;
+      onSearchChange(value);
+    }
     if (storageKey) {
       if (value) {
         localStorage.setItem(`${storageKey}_searchQuery`, value);
@@ -139,6 +152,22 @@ export function FilterBar({
         localStorage.removeItem(`${storageKey}_searchQuery`);
       }
     }
+  };
+
+  const handleSearchChange = (value: string) => {
+    setDraftSearchQuery(value);
+    if (!isComposingRef.current) {
+      commitSearchChange(value);
+    }
+  };
+
+  const handleSearchCompositionEnd = (
+    event: React.CompositionEvent<HTMLInputElement>,
+  ) => {
+    isComposingRef.current = false;
+    const value = event.currentTarget.value;
+    setDraftSearchQuery(value);
+    commitSearchChange(value);
   };
 
   // 处理状态筛选变更
@@ -188,8 +217,12 @@ export function FilterBar({
                      focus:ring-neutral-600 focus:border-neutral-600
                      dark:focus:ring-neutral-500 dark:focus:border-neutral-500"
           placeholder={finalSearchPlaceholder}
-          value={searchQuery}
+          value={draftSearchQuery}
           onChange={e => handleSearchChange(e.target.value)}
+          onCompositionStart={() => {
+            isComposingRef.current = true;
+          }}
+          onCompositionEnd={handleSearchCompositionEnd}
         />
       </div>
 
