@@ -17,6 +17,7 @@ import { DownloadSettingsPanel } from "../components/panel/DownloadSettingsPanel
 import { FullDataBackupPanel } from "../components/panel/FullDataBackupPanel";
 import { GameSettingsPanel } from "../components/panel/GameSettingsPanel";
 import { MetadataSettingsPanel } from "../components/panel/MetadataSettingsPanel";
+import { ProxySettingsPanel } from "../components/panel/ProxySettingsPanel";
 import { UpdateSettingsPanel } from "../components/panel/UpdateSettingsPanel";
 import { SettingsSkeleton } from "../components/skeleton/SettingsSkeleton";
 import { CollapsibleSection } from "../components/ui/CollapsibleSection";
@@ -176,6 +177,17 @@ function SettingsPage() {
           defaultOpen={false}
         >
           <GameSettingsPanel
+            formData={draftConfig}
+            onChange={handleDraftChange}
+          />
+        </CollapsibleSection>
+
+        <CollapsibleSection
+          title={t("settings.sections.proxy")}
+          icon="i-mdi-lan-connect"
+          defaultOpen={false}
+        >
+          <ProxySettingsPanel
             formData={draftConfig}
             onChange={handleDraftChange}
           />

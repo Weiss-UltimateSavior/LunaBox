@@ -261,7 +261,7 @@ func (s *GameService) asyncDownloadCoverImage(gameID, gameName, coverURL string)
 	applog.LogInfof(s.ctx, "asyncDownloadCoverImage: downloading cover for %s", gameName)
 
 	// 下载并保存图片
-	proxyMode, proxyURL := proxyConfig(s.config)
+	proxyMode, proxyURL := s.config.ImageProxyConfig()
 	localPath, err := imageutils.DownloadAndSaveCoverImageWithProxy(coverURL, gameID, proxyMode, proxyURL)
 	if err != nil {
 		applog.LogWarningf(s.ctx, "asyncDownloadCoverImage: failed to download cover for %s: %v", gameName, err)
@@ -861,7 +861,8 @@ func (s *GameService) fetchMetadataResultByRequest(req vo.MetadataRequest) (meta
 }
 
 func (s *GameService) fetchMetadataResultBySource(source enums2.SourceType, sourceID string) (metadata.MetadataResult, error) {
-	proxyOption := metadataProxyOption(s.config)
+	proxyMode, proxyURL := s.config.MetadataProxyConfig()
+	proxyOption := metadata.WithProxy(proxyMode, proxyURL)
 	switch source {
 	case enums2.Bangumi:
 		if s.bangumiService == nil {
@@ -1273,7 +1274,8 @@ func (s *GameService) findGameIDByPath(path string) (string, bool) {
 func (s *GameService) getConfiguredMetadataSearchSources() []metadataSearchSource {
 	vndbToken := ""
 	language := ""
-	proxyOption := metadataProxyOption(s.config)
+	proxyMode, proxyURL := s.config.MetadataProxyConfig()
+	proxyOption := metadata.WithProxy(proxyMode, proxyURL)
 	if s.config != nil {
 		vndbToken = s.config.VNDBAccessToken
 		language = s.config.Language

@@ -986,8 +986,7 @@ func (s *DownloadService) prepareDownloadExecution(task *DownloadTask) (string, 
 	resumeOffset := s.inspectResumeOffset(task, destPath)
 	config := downloadutils.TransferConfig{}
 	if s.config != nil {
-		config.ProxyMode = s.config.DownloadProxyMode
-		config.ProxyURL = s.config.DownloadProxyURL
+		config.ProxyMode, config.ProxyURL = s.config.GameDownloadProxyConfig()
 	}
 	downloader, proxyDesc, err := downloadutils.NewDownloader(config)
 	if err != nil {

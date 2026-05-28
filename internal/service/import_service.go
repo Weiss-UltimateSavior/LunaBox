@@ -286,7 +286,8 @@ func (s *ImportService) FetchMetadataForCandidate(searchName string) (vo.BatchIm
 		SearchName:  searchName,
 		MatchStatus: "not_found",
 	}
-	proxyOption := metadataProxyOption(s.config)
+	proxyMode, proxyURL := s.config.MetadataProxyConfig()
+	proxyOption := metadata.WithProxy(proxyMode, proxyURL)
 
 	sources := []struct {
 		source      enums.SourceType

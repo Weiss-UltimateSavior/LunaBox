@@ -79,6 +79,9 @@ export namespace appconf {
 	    game_library_path?: string;
 	    download_proxy_mode?: string;
 	    download_proxy_url?: string;
+	    metadata_proxy_mode?: string;
+	    image_proxy_mode?: string;
+	    game_download_proxy_mode?: string;
 	    show_nsfw_tags: boolean;
 	    enable_tag_translation: boolean;
 	
@@ -166,6 +169,9 @@ export namespace appconf {
 	        this.game_library_path = source["game_library_path"];
 	        this.download_proxy_mode = source["download_proxy_mode"];
 	        this.download_proxy_url = source["download_proxy_url"];
+	        this.metadata_proxy_mode = source["metadata_proxy_mode"];
+	        this.image_proxy_mode = source["image_proxy_mode"];
+	        this.game_download_proxy_mode = source["game_download_proxy_mode"];
 	        this.show_nsfw_tags = source["show_nsfw_tags"];
 	        this.enable_tag_translation = source["enable_tag_translation"];
 	    }
@@ -175,6 +181,10 @@ export namespace appconf {
 
 export namespace enums {
 	
+	export enum SortOrder {
+	    ASC = "asc",
+	    DESC = "desc",
+	}
 	export enum SourceType {
 	    LOCAL = "local",
 	    BANGUMI = "bangumi",
@@ -207,10 +217,6 @@ export namespace enums {
 	    CREATED_AT = "created_at",
 	    RATING = "rating",
 	    RELEASE_DATE = "release_date",
-	}
-	export enum SortOrder {
-	    ASC = "asc",
-	    DESC = "desc",
 	}
 
 }

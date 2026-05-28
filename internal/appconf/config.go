@@ -6,6 +6,7 @@ import (
 	enums2 "lunabox/internal/common/enums"
 	"lunabox/internal/utils"
 	"lunabox/internal/utils/apputils"
+	"lunabox/internal/utils/proxyutils"
 	"os"
 	"path/filepath"
 	"strings"
@@ -126,8 +127,11 @@ type AppConfig struct {
 	// 游戏库路径配置
 	GameLibraryPath string `json:"game_library_path,omitempty"` // 游戏库主目录（下载的游戏将解压到此）
 	// 下载代理配置
-	DownloadProxyMode string `json:"download_proxy_mode,omitempty"` // 下载代理模式：system / manual / direct
-	DownloadProxyURL  string `json:"download_proxy_url,omitempty"`  // 手动代理 URL，支持 http/https/socks5
+	DownloadProxyMode     string `json:"download_proxy_mode,omitempty"`      // Deprecated: legacy 下载代理模式，保留用于旧配置迁移
+	DownloadProxyURL      string `json:"download_proxy_url,omitempty"`       // 公共手动代理 URL，供元数据、图片、游戏下载复用
+	MetadataProxyMode     string `json:"metadata_proxy_mode,omitempty"`      // 元数据代理模式：system / manual / direct
+	ImageProxyMode        string `json:"image_proxy_mode,omitempty"`         // 图片下载代理模式：system / manual / direct
+	GameDownloadProxyMode string `json:"game_download_proxy_mode,omitempty"` // 游戏下载代理模式：system / manual / direct
 	// Tag 配置
 	ShowNSFWTags         bool `json:"show_nsfw_tags"`         // 是否在详情页展示 NSFW tag，默认 false
 	EnableTagTranslation bool `json:"enable_tag_translation"` // 是否显示 VNDB tag 中文翻译，默认 true
@@ -217,6 +221,9 @@ func LoadConfig() (*AppConfig, error) {
 		GameLibraryPath:             "",
 		DownloadProxyMode:           "system",
 		DownloadProxyURL:            "",
+		MetadataProxyMode:           "system",
+		ImageProxyMode:              "system",
+		GameDownloadProxyMode:       "system",
 		EnableTagTranslation:        true,
 	}
 
@@ -243,6 +250,9 @@ func LoadConfig() (*AppConfig, error) {
 		log.Printf("Failed to parse appconf file: %v", err)
 		return config, err
 	}
+	if !jsonHasField(data, "game_download_proxy_mode") && strings.TrimSpace(config.DownloadProxyMode) != "" {
+		config.GameDownloadProxyMode = config.DownloadProxyMode
+	}
 
 	config.MetadataSources = normalizeMetadataSources(config.MetadataSources)
 
@@ -257,6 +267,9 @@ func LoadConfig() (*AppConfig, error) {
 	config.MCPPort = NormalizeMCPPort(config.MCPPort)
 
 	shouldSaveSanitizedConfig := SanitizeBangumiOAuthConfig(config)
+	if NormalizeProxySettings(config) {
+		shouldSaveSanitizedConfig = true
+	}
 	if SanitizeOneDriveOAuthConfig(config) {
 		shouldSaveSanitizedConfig = true
 	}
@@ -285,6 +298,7 @@ func SaveConfig(config *AppConfig) error {
 		return err
 	}
 	config.MetadataSources = normalizeMetadataSources(config.MetadataSources)
+	NormalizeProxySettings(config)
 	SanitizeBangumiOAuthConfig(config)
 	SanitizeOneDriveOAuthConfig(config)
 	config.MCPPort = NormalizeMCPPort(config.MCPPort)
@@ -298,122 +312,31 @@ func SaveConfig(config *AppConfig) error {
 	return os.WriteFile(configPath, data, 0644)
 }
 
-func normalizeMetadataSources(sources []string) []string {
-	if len(sources) == 0 {
-		return cloneStringSlice(defaultMetadataSources)
-	}
-
-	result := make([]string, 0, len(defaultMetadataSources))
-	seen := make(map[string]struct{}, len(defaultMetadataSources))
-
-	for _, source := range sources {
-		normalized := strings.ToLower(strings.TrimSpace(source))
-		if normalized == "" {
-			continue
-		}
-		if _, ok := allowedMetadataSourceSet[normalized]; !ok {
-			continue
-		}
-		if _, exists := seen[normalized]; exists {
-			continue
-		}
-
-		seen[normalized] = struct{}{}
-		result = append(result, normalized)
-	}
-
-	if len(result) == 0 {
-		return cloneStringSlice(defaultMetadataSources)
-	}
-	return result
-}
-
-func cloneStringSlice(values []string) []string {
-	if len(values) == 0 {
-		return []string{}
-	}
-	cloned := make([]string, len(values))
-	copy(cloned, values)
-	return cloned
-}
-
-func boolPtr(value bool) *bool {
-	v := value
-	return &v
-}
-
-func NormalizeMCPPort(port int) int {
-	if port < 1 || port > 65535 {
-		return DefaultMCPPort
-	}
-	return port
-}
-
-func SanitizeOneDriveOAuthConfig(config *AppConfig) bool {
-	if config == nil {
-		return false
-	}
-
-	trimmedClientID := strings.TrimSpace(config.OneDriveClientID)
-	changed := config.OneDriveClientID != trimmedClientID
-	config.OneDriveClientID = trimmedClientID
-
-	if config.OneDriveClientID == legacyOneDriveDefaultClientID {
-		config.OneDriveClientID = ""
-		changed = true
-		if config.OneDriveRefreshToken != "" {
-			config.OneDriveRefreshToken = ""
-		}
-	}
-
-	return changed
-}
-
-func SanitizeBangumiOAuthConfig(config *AppConfig) bool {
-	if config == nil {
-		return false
-	}
-
-	trimmedAccessToken := strings.TrimSpace(config.BangumiAccessToken)
-	trimmedRefreshToken := strings.TrimSpace(config.BangumiRefreshToken)
-	trimmedExpiresAt := strings.TrimSpace(config.BangumiTokenExpiresAt)
-	trimmedUserID := strings.TrimSpace(config.BangumiAuthorizedUserID)
-	trimmedUsername := strings.TrimSpace(config.BangumiAuthorizedUsername)
-	trimmedAvatarURL := strings.TrimSpace(config.BangumiAuthorizedAvatarURL)
-	trimmedAuthError := strings.TrimSpace(config.BangumiAuthError)
-
-	changed := config.BangumiAccessToken != trimmedAccessToken ||
-		config.BangumiRefreshToken != trimmedRefreshToken ||
-		config.BangumiTokenExpiresAt != trimmedExpiresAt ||
-		config.BangumiAuthorizedUserID != trimmedUserID ||
-		config.BangumiAuthorizedUsername != trimmedUsername ||
-		config.BangumiAuthorizedAvatarURL != trimmedAvatarURL ||
-		config.BangumiAuthError != trimmedAuthError
-
-	config.BangumiAccessToken = trimmedAccessToken
-	config.BangumiRefreshToken = trimmedRefreshToken
-	config.BangumiTokenExpiresAt = trimmedExpiresAt
-	config.BangumiAuthorizedUserID = trimmedUserID
-	config.BangumiAuthorizedUsername = trimmedUsername
-	config.BangumiAuthorizedAvatarURL = trimmedAvatarURL
-	config.BangumiAuthError = trimmedAuthError
-	if config.BangumiStatusPushEnabled == nil {
-		config.BangumiStatusPushEnabled = boolPtr(true)
-		changed = true
-	}
-
-	if config.BangumiAccessToken == "" && config.BangumiTokenExpiresAt != "" {
-		config.BangumiTokenExpiresAt = ""
-		changed = true
-	}
-
-	return changed
-}
-
 func IsBangumiStatusPushEnabled(config *AppConfig) bool {
 	if config == nil || config.BangumiStatusPushEnabled == nil {
 		return true
 	}
 
 	return *config.BangumiStatusPushEnabled
+}
+
+func (config *AppConfig) MetadataProxyConfig() (string, string) {
+	if config == nil {
+		return proxyutils.DownloadProxyModeSystem, ""
+	}
+	return config.MetadataProxyMode, config.DownloadProxyURL
+}
+
+func (config *AppConfig) ImageProxyConfig() (string, string) {
+	if config == nil {
+		return proxyutils.DownloadProxyModeSystem, ""
+	}
+	return config.ImageProxyMode, config.DownloadProxyURL
+}
+
+func (config *AppConfig) GameDownloadProxyConfig() (string, string) {
+	if config == nil {
+		return proxyutils.DownloadProxyModeSystem, ""
+	}
+	return config.GameDownloadProxyMode, config.DownloadProxyURL
 }

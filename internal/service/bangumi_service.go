@@ -281,7 +281,8 @@ func (s *BangumiService) refreshAccessToken(ctx context.Context) (string, error)
 }
 
 func (s *BangumiService) fetchMetadataByID(ctx context.Context, sourceID string) (metadata.MetadataResult, error) {
-	getter := metadata.NewBangumiInfoGetter(metadataProxyOption(s.config))
+	proxyMode, proxyURL := s.config.MetadataProxyConfig()
+	getter := metadata.NewBangumiInfoGetter(metadata.WithProxy(proxyMode, proxyURL))
 
 	token, err := s.getValidAccessToken(ctx)
 	if err != nil {
@@ -302,7 +303,8 @@ func (s *BangumiService) fetchMetadataByID(ctx context.Context, sourceID string)
 }
 
 func (s *BangumiService) fetchMetadataByName(ctx context.Context, name string) (metadata.MetadataResult, error) {
-	getter := metadata.NewBangumiInfoGetter(metadataProxyOption(s.config))
+	proxyMode, proxyURL := s.config.MetadataProxyConfig()
+	getter := metadata.NewBangumiInfoGetter(metadata.WithProxy(proxyMode, proxyURL))
 
 	token, err := s.getValidAccessToken(ctx)
 	if err != nil {
