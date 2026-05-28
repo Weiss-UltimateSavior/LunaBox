@@ -72,17 +72,57 @@ export function GameEditPanel({
           </p>
         </div>
 
-        <div>
-          <label className="block text-sm font-medium text-brand-700 dark:text-brand-300 mb-1">
-            {t("gameEdit.developer")}
-          </label>
-          <input
-            type="text"
-            value={game.company}
-            onChange={e =>
-              onGameChange({ ...game, company: e.target.value } as models.Game)}
-            className="glass-input w-full px-3 py-2 border border-brand-300 dark:border-brand-600 rounded-md bg-white dark:bg-brand-700 text-brand-900 dark:text-white focus:ring-2 focus:ring-neutral-500 outline-none"
-          />
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_18rem]">
+          <div>
+            <label className="block text-sm font-medium text-brand-700 dark:text-brand-300 mb-1">
+              {t("gameEdit.developer")}
+            </label>
+            <input
+              type="text"
+              value={game.company}
+              onChange={e =>
+                onGameChange({
+                  ...game,
+                  company: e.target.value,
+                } as models.Game)}
+              className="glass-input w-full px-3 py-2 border border-brand-300 dark:border-brand-600 rounded-md bg-white dark:bg-brand-700 text-brand-900 dark:text-white focus:ring-2 focus:ring-neutral-500 outline-none"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-brand-700 dark:text-brand-300 mb-1">
+              {t("gameEdit.rating")}
+            </label>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                min={0}
+                max={10}
+                step={0.1}
+                inputMode="decimal"
+                value={game.rating > 0 ? game.rating : ""}
+                onChange={(e) => {
+                  const rawValue = e.target.value;
+                  const nextRating
+                    = rawValue === ""
+                      ? 0
+                      : Math.min(10, Math.max(0, Number(rawValue)));
+                  onGameChange({
+                    ...game,
+                    rating: Number.isFinite(nextRating) ? nextRating : 0,
+                  } as models.Game);
+                }}
+                placeholder={t("gameEdit.ratingPlaceholder")}
+                className="glass-input min-w-0 flex-1 px-3 py-2 border border-brand-300 dark:border-brand-600 rounded-md bg-white dark:bg-brand-700 text-brand-900 dark:text-white focus:ring-2 focus:ring-neutral-500 outline-none"
+              />
+              <span className="shrink-0 text-sm text-brand-500 dark:text-brand-400">
+                / 10
+              </span>
+            </div>
+            <p className="mt-1 text-xs text-brand-500 dark:text-brand-400">
+              {t("gameEdit.ratingHint")}
+            </p>
+          </div>
         </div>
 
         <div>
