@@ -661,6 +661,13 @@ export function BatchImportModal({
                 t("batchImportModal.metadataExists", { name }),
               skippedSummary: count =>
                 t("batchImportModal.skippedExistingSummary", { count }),
+              skippedDetails: t("batchImportModal.skippedExistingDetails"),
+              skippedViewDetails: t("batchImportModal.skippedExistingView"),
+              skippedModalTitle: t("batchImportModal.skippedExistingTitle"),
+              skippedModalHint: t("batchImportModal.skippedExistingHint"),
+              skippedReason: t("batchImportModal.skippedExistingReason"),
+              skippedPath: t("batchImportModal.skippedExistingPath"),
+              closeSkippedModal: t("common.confirm"),
             }}
             theme={{
               detectedCardClassName: "bg-neutral-50 dark:bg-neutral-900/20",

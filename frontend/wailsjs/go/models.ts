@@ -183,6 +183,19 @@ export namespace appconf {
 
 export namespace enums {
 	
+	export enum SortOrder {
+	    ASC = "asc",
+	    DESC = "desc",
+	}
+	export enum SourceType {
+	    LOCAL = "local",
+	    BANGUMI = "bangumi",
+	    VNDB = "vndb",
+	    YMGAL = "ymgal",
+	    STEAM = "steam",
+	    DLSITE = "dlsite",
+	    EROGAMESCAPE = "erogamescape",
+	}
 	export enum Period {
 	    DAY = "day",
 	    WEEK = "week",
@@ -207,19 +220,6 @@ export namespace enums {
 	    CREATED_AT = "created_at",
 	    RATING = "rating",
 	    RELEASE_DATE = "release_date",
-	}
-	export enum SortOrder {
-	    ASC = "asc",
-	    DESC = "desc",
-	}
-	export enum SourceType {
-	    LOCAL = "local",
-	    BANGUMI = "bangumi",
-	    VNDB = "vndb",
-	    YMGAL = "ymgal",
-	    STEAM = "steam",
-	    DLSITE = "dlsite",
-	    EROGAMESCAPE = "erogamescape",
 	}
 
 }

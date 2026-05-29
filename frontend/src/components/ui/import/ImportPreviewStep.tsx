@@ -1,6 +1,8 @@
 import type { ReactNode } from "react";
 import type { BetterDataTableColumn } from "../better/BetterDataTable";
 import type { ImportCandidate } from "./types";
+import { useState } from "react";
+import { SkippedImportCandidatesModal } from "../../modal/SkippedImportCandidatesModal";
 import { BetterDataTable } from "../better/BetterDataTable";
 import { BetterSelect } from "../better/BetterSelect";
 
@@ -35,6 +37,12 @@ interface ImportPreviewLabels {
   metadataExists?: (name: string) => string;
   skippedSummary?: (count: number) => string;
   skippedDetails?: string;
+  skippedViewDetails?: string;
+  skippedModalTitle?: string;
+  skippedModalHint?: string;
+  skippedReason?: string;
+  skippedPath?: string;
+  closeSkippedModal?: string;
 }
 
 interface ImportPreviewStepProps {
@@ -56,9 +64,11 @@ interface ImportPreviewStepProps {
   onManualSelect: (index: number) => void;
 }
 
+const EMPTY_SKIPPED_CANDIDATES: ImportCandidate[] = [];
+
 export function ImportPreviewStep({
   candidates,
-  skippedCandidates = [],
+  skippedCandidates = EMPTY_SKIPPED_CANDIDATES,
   matchedCount,
   notFoundCount,
   pendingCount,
@@ -74,6 +84,7 @@ export function ImportPreviewStep({
   onUpdateSelectedExe,
   onManualSelect,
 }: ImportPreviewStepProps) {
+  const [showSkippedModal, setShowSkippedModal] = useState(false);
   const selectedCount = candidates.filter(c => c.isSelected).length;
   const skippedCount = skippedCandidates.length;
   const hasDetectedItems = candidates.length > 0 || skippedCount > 0;
@@ -271,25 +282,31 @@ export function ImportPreviewStep({
       )}
 
       {skippedCount > 0 && (
-        <details className="rounded-lg border border-yellow-200 bg-yellow-50 p-3 dark:border-yellow-800 dark:bg-yellow-900/20">
-          <summary className="cursor-pointer text-sm font-medium text-yellow-700 dark:text-yellow-300">
-            {labels.skippedSummary
-              ? labels.skippedSummary(skippedCount)
-              : `${skippedCount} skipped existing items`}
-          </summary>
-          <div className="mt-3 max-h-36 overflow-y-auto">
-            <ul className="space-y-1 text-xs text-yellow-700 dark:text-yellow-300">
-              {skippedCandidates.map((candidate, index) => (
-                <li
-                  key={`${candidate.folderPath}-${candidate.selectedExe}-${index}`}
-                >
-                  {candidate.searchName}
-                  {candidate.skipReason ? ` - ${candidate.skipReason}` : ""}
-                </li>
-              ))}
-            </ul>
+        <div className="flex items-center justify-between gap-3 rounded-lg border border-yellow-200 bg-yellow-50 px-4 py-3 dark:border-yellow-800/80 dark:bg-yellow-900/20">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="i-mdi-alert-circle-outline shrink-0 text-xl text-yellow-600 dark:text-yellow-300" />
+            <div className="min-w-0">
+              <div className="truncate text-sm font-medium text-yellow-800 dark:text-yellow-200">
+                {labels.skippedSummary
+                  ? labels.skippedSummary(skippedCount)
+                  : `${skippedCount} skipped existing items`}
+              </div>
+              {labels.skippedDetails && (
+                <div className="mt-0.5 truncate text-xs text-yellow-700/80 dark:text-yellow-300/80">
+                  {labels.skippedDetails}
+                </div>
+              )}
+            </div>
           </div>
-        </details>
+          <button
+            type="button"
+            onClick={() => setShowSkippedModal(true)}
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-yellow-300 bg-white/70 px-3 py-1.5 text-xs font-medium text-yellow-800 transition-colors hover:bg-yellow-100 dark:border-yellow-700 dark:bg-yellow-950/30 dark:text-yellow-200 dark:hover:bg-yellow-900/40"
+          >
+            <div className="i-mdi-format-list-bulleted text-base" />
+            {labels.skippedViewDetails || labels.skippedDetails || "View list"}
+          </button>
+        </div>
       )}
 
       <BetterDataTable
@@ -333,6 +350,23 @@ export function ImportPreviewStep({
           </button>
         </div>
       </div>
+
+      <SkippedImportCandidatesModal
+        isOpen={showSkippedModal}
+        candidates={skippedCandidates}
+        labels={{
+          title: labels.skippedModalTitle || "Skipped existing games",
+          hint:
+            labels.skippedModalHint
+            || (labels.skippedSummary
+              ? labels.skippedSummary(skippedCount)
+              : `${skippedCount} skipped existing items`),
+          path: labels.skippedPath || "Path",
+          reason: labels.skippedReason || "Reason",
+          close: labels.closeSkippedModal || "Close",
+        }}
+        onClose={() => setShowSkippedModal(false)}
+      />
     </div>
   );
 }
