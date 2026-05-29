@@ -590,6 +590,22 @@ export namespace service {
 	
 	    }
 	}
+	export class CoverImageDownloadItem {
+	    GameID: string;
+	    GameName: string;
+	    CoverURL: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new CoverImageDownloadItem(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.GameID = source["GameID"];
+	        this.GameName = source["GameName"];
+	        this.CoverURL = source["CoverURL"];
+	    }
+	}
 	export class DownloadTask {
 	    id: string;
 	    request: vo.InstallRequest;

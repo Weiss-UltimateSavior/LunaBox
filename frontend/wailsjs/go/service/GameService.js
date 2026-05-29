@@ -70,8 +70,8 @@ export function SelectCoverImageWithTempID() {
   return window['go']['service']['GameService']['SelectCoverImageWithTempID']();
 }
 
-export function SelectGameExecutable() {
-  return window['go']['service']['GameService']['SelectGameExecutable']();
+export function SelectGameExecutable(arg1) {
+  return window['go']['service']['GameService']['SelectGameExecutable'](arg1);
 }
 
 export function SelectSaveDirectory() {
@@ -88,6 +88,10 @@ export function SetBangumiService(arg1) {
 
 export function SetEventEmitter(arg1) {
   return window['go']['service']['GameService']['SetEventEmitter'](arg1);
+}
+
+export function SetImageDownloadTaskStarter(arg1) {
+  return window['go']['service']['GameService']['SetImageDownloadTaskStarter'](arg1);
 }
 
 export function SetTagService(arg1) {

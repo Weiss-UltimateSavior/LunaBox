@@ -2,6 +2,8 @@ import type { service } from "../../../wailsjs/go/models";
 import { useTranslation } from "react-i18next";
 import { formatFileSize } from "../../utils/size";
 
+const IMAGE_DOWNLOAD_SOURCE = "cover-image-batch";
+
 function StatusBadge({ status }: { status: service.DownloadTask["status"] }) {
   const { t } = useTranslation();
   const map: Record<
@@ -78,6 +80,8 @@ export function DownloadCard({
   const canCancel = isActive || isExtracting || isPaused;
   const progress = Math.max(0, Math.min(100, task.progress ?? 0));
   const canOpenFolder = !!task.file_path;
+  const isImageDownloadTask
+    = task.request.download_source === IMAGE_DOWNLOAD_SOURCE;
   const manualExtractRequired
     = task.status === "done" && task.error === "manual_extract_required";
 
@@ -93,7 +97,10 @@ export function DownloadCard({
           </p>
           <p className="mt-0.5 truncate text-xs text-brand-500 dark:text-brand-400">
             {task.request.download_source
-              || t("downloads.unknownSource", "未知来源")}
+              ? isImageDownloadTask
+                ? t("downloads.imageTask.source", "图片缓存")
+                : task.request.download_source
+              : t("downloads.unknownSource", "未知来源")}
           </p>
         </div>
         <div className="shrink-0 flex items-center gap-2">
@@ -103,7 +110,8 @@ export function DownloadCard({
               type="button"
               title={t("downloads.copyURL", "复制下载地址")}
               onClick={() => onCopyURL(task.request.url)}
-              className="flex h-10 w-10 items-center justify-center text-brand-700 transition-colors hover:bg-brand-200 hover:text-brand-900 dark:text-brand-200 dark:hover:bg-brand-600 dark:hover:text-white"
+              disabled={!task.request.url}
+              className="flex h-10 w-10 items-center justify-center text-brand-700 transition-colors hover:bg-brand-200 hover:text-brand-900 disabled:cursor-not-allowed disabled:opacity-40 dark:text-brand-200 dark:hover:bg-brand-600 dark:hover:text-white"
             >
               <span className="i-mdi-link text-xl" />
             </button>
@@ -116,7 +124,7 @@ export function DownloadCard({
             >
               <span className="i-mdi-folder-open-outline text-xl" />
             </button>
-            {task.status === "downloading" && (
+            {task.status === "downloading" && !isImageDownloadTask && (
               <button
                 type="button"
                 title={t("downloads.pause", "暂停下载")}
@@ -126,7 +134,7 @@ export function DownloadCard({
                 <span className="i-mdi-pause text-xl" />
               </button>
             )}
-            {isPaused && (
+            {isPaused && !isImageDownloadTask && (
               <button
                 type="button"
                 title={t("downloads.resume", "继续下载")}
@@ -136,7 +144,7 @@ export function DownloadCard({
                 <span className="i-mdi-play text-xl" />
               </button>
             )}
-            {isError && (
+            {isError && !isImageDownloadTask && (
               <button
                 type="button"
                 title={t("downloads.retry", "重试下载")}
@@ -186,14 +194,34 @@ export function DownloadCard({
               %
             </span>
             <span>
-              {formatFileSize(task.downloaded)}
-              {task.total > 0 ? ` / ${formatFileSize(task.total)}` : ""}
+              {isImageDownloadTask ? (
+                `${task.downloaded}${task.total > 0 ? ` / ${task.total}` : ""} ${t("downloads.imageTask.unit", "张")}`
+              ) : (
+                <>
+                  {formatFileSize(task.downloaded)}
+                  {task.total > 0 ? ` / ${formatFileSize(task.total)}` : ""}
+                </>
+              )}
             </span>
           </div>
         </div>
       )}
 
-      {task.status === "done" && task.file_path && (
+      {task.status === "done" && isImageDownloadTask && (
+        <div className="flex items-center gap-1 text-xs text-brand-500 dark:text-brand-400">
+          <span className="i-mdi-image-multiple-outline shrink-0" />
+          <span>
+            {task.error
+              ? t(
+                  "downloads.imageTask.doneWithError",
+                  "图片批量下载完成，部分失败",
+                )
+              : t("downloads.imageTask.done", "图片批量下载完成")}
+          </span>
+        </div>
+      )}
+
+      {task.status === "done" && task.file_path && !isImageDownloadTask && (
         <>
           <div className="flex items-center gap-1 text-xs text-brand-500 dark:text-brand-400">
             <span className="i-mdi-folder-check shrink-0" />

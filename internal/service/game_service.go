@@ -28,12 +28,19 @@ import (
 )
 
 type GameService struct {
-	ctx            context.Context
-	db             *sql.DB
-	config         *appconf.AppConfig
-	tagService     *TagService
-	bangumiService *BangumiService
-	emitEvent      func(context.Context, string, ...interface{})
+	ctx              context.Context
+	db               *sql.DB
+	config           *appconf.AppConfig
+	tagService       *TagService
+	bangumiService   *BangumiService
+	emitEvent        func(context.Context, string, ...interface{})
+	imageTaskStarter func([]CoverImageDownloadItem) string
+}
+
+type CoverImageDownloadItem struct {
+	GameID   string
+	GameName string
+	CoverURL string
 }
 
 type metadataSearchSource struct {
@@ -75,13 +82,52 @@ func (s *GameService) SetBangumiService(bangumiService *BangumiService) {
 	s.bangumiService = bangumiService
 }
 
+func (s *GameService) SetImageDownloadTaskStarter(starter func([]CoverImageDownloadItem) string) {
+	s.imageTaskStarter = starter
+}
+
 func (s *GameService) SetEventEmitter(emit func(context.Context, string, ...interface{})) {
 	s.emitEvent = emit
 }
 
-func (s *GameService) SelectGameExecutable() (string, error) {
+func executableDialogDefaults(currentPath string) (string, string) {
+	currentPath = strings.TrimSpace(currentPath)
+	if currentPath == "" {
+		return "", ""
+	}
+
+	cleanPath := filepath.Clean(currentPath)
+	absPath, err := filepath.Abs(cleanPath)
+	if err != nil {
+		absPath = cleanPath
+	}
+
+	info, err := os.Stat(absPath)
+	if err == nil {
+		if info.IsDir() {
+			return absPath, ""
+		}
+		return filepath.Dir(absPath), filepath.Base(absPath)
+	}
+
+	if filepath.Ext(absPath) == "" {
+		return "", ""
+	}
+
+	parentDir := filepath.Dir(absPath)
+	if parentInfo, statErr := os.Stat(parentDir); statErr == nil && parentInfo.IsDir() {
+		return parentDir, filepath.Base(absPath)
+	}
+
+	return "", ""
+}
+
+func (s *GameService) SelectGameExecutable(currentPath string) (string, error) {
+	defaultDirectory, defaultFilename := executableDialogDefaults(currentPath)
 	selection, err := runtime.OpenFileDialog(s.ctx, runtime.OpenDialogOptions{
-		Title: "Select Game Executable",
+		Title:            "Select Game Executable",
+		DefaultDirectory: defaultDirectory,
+		DefaultFilename:  defaultFilename,
 		Filters: []runtime.FileFilter{
 			{
 				DisplayName: "Executables",
@@ -232,7 +278,7 @@ func (s *GameService) addGameWithTags(game models.Game, tags []metadata.TagItem,
 
 	// 后台异步下载封面图片（不阻塞添加流程）
 	if originalCoverURL != "" {
-		go s.asyncDownloadCoverImage(game.ID, game.Name, originalCoverURL)
+		go s.asyncDownloadCoverImage(game.ID, game.Name, originalCoverURL, true)
 	}
 
 	return nil
@@ -266,28 +312,53 @@ func (s *GameService) syncScrapedTagsForGame(game models.Game) {
 }
 
 // asyncDownloadCoverImage 后台异步下载封面图片并更新数据库
-func (s *GameService) asyncDownloadCoverImage(gameID, gameName, coverURL string) {
+func (s *GameService) asyncDownloadCoverImage(gameID, gameName, coverURL string, emitToast bool) bool {
 	// 检查是否为远程URL
 	if coverURL == "" || !strings.HasPrefix(coverURL, "http") || strings.Contains(coverURL, "wails.localhost") {
-		return
+		return false
 	}
 
 	applog.LogInfof(s.ctx, "asyncDownloadCoverImage: downloading cover for %s", gameName)
+	if emitToast {
+		s.emitCoverImageDownloadEvent(gameID, gameName, "started", "")
+	}
 
 	// 下载并保存图片
 	localPath, err := imageutils.DownloadAndSaveCoverImageWithProxyConfig(coverURL, gameID, s.config)
 	if err != nil {
 		applog.LogWarningf(s.ctx, "asyncDownloadCoverImage: failed to download cover for %s: %v", gameName, err)
-		return
+		if emitToast {
+			s.emitCoverImageDownloadEvent(gameID, gameName, "failed", err.Error())
+		}
+		return false
 	}
 
 	// 更新数据库中的封面路径
 	if err := s.updateCoverURL(gameID, localPath); err != nil {
 		applog.LogErrorf(s.ctx, "asyncDownloadCoverImage: failed to update cover URL for %s: %v", gameName, err)
-		return
+		if emitToast {
+			s.emitCoverImageDownloadEvent(gameID, gameName, "failed", err.Error())
+		}
+		return false
 	}
 
 	applog.LogInfof(s.ctx, "asyncDownloadCoverImage: successfully cached cover for %s", gameName)
+	if emitToast {
+		s.emitCoverImageDownloadEvent(gameID, gameName, "done", "")
+	}
+	return true
+}
+
+func (s *GameService) emitCoverImageDownloadEvent(gameID, gameName, status, errorMsg string) {
+	if s.ctx == nil || s.emitEvent == nil {
+		return
+	}
+	s.emitEvent(s.ctx, "cover-image:download", map[string]string{
+		"game_id":   gameID,
+		"game_name": gameName,
+		"status":    status,
+		"error":     errorMsg,
+	})
 }
 
 // updateCoverURL 更新游戏的封面URL
@@ -938,32 +1009,38 @@ func isSteamAppID(sourceId string) bool {
 
 // UpdateGameFromRemote 从远程数据源更新游戏信息
 func (s *GameService) UpdateGameFromRemote(gameID string) error {
+	_, err := s.updateGameMetadataFromRemote(gameID, true)
+	return err
+}
+
+func (s *GameService) updateGameMetadataFromRemote(gameID string, downloadCoverImmediately bool) (string, error) {
 	// 获取现有游戏信息
 	existingGame, err := s.GetGameByID(gameID)
 	if err != nil {
-		return fmt.Errorf("failed to get game: %w", err)
+		return "", fmt.Errorf("failed to get game: %w", err)
 	}
 
 	sourceType := normalizeMetadataSourceType(existingGame.SourceType)
 	sourceID := strings.TrimSpace(existingGame.SourceID)
 	if existingGame.MetadataLocked {
-		return fmt.Errorf("游戏元数据已锁定，请先解锁后再更新")
+		return "", fmt.Errorf("游戏元数据已锁定，请先解锁后再更新")
 	}
 	if sourceType == "" || sourceType == enums2.Local || sourceID == "" {
-		return fmt.Errorf("游戏缺少数据源信息，无法从远程更新")
+		return "", fmt.Errorf("游戏缺少数据源信息，无法从远程更新")
 	}
 
 	if !s.isMetadataSourceEnabled(sourceType) {
-		return fmt.Errorf("元数据源 %s 未启用，无法更新游戏元数据", sourceType)
+		return "", fmt.Errorf("元数据源 %s 未启用，无法更新游戏元数据", sourceType)
 	}
 
 	sourceId := strings.ToLower(sourceID)
 	metaResult, err := s.fetchMetadataResultBySource(sourceType, sourceId)
 	if err != nil {
-		return fmt.Errorf("failed to fetch metadata from remote: %w", err)
+		return "", fmt.Errorf("failed to fetch metadata from remote: %w", err)
 	}
 
 	remoteGame := metaResult.Game
+	remoteCoverURL := strings.TrimSpace(remoteGame.CoverURL)
 
 	// 保留本地重要字段，更新远程可获取的字段
 	existingGame.Name = remoteGame.Name
@@ -973,13 +1050,14 @@ func (s *GameService) UpdateGameFromRemote(gameID string) error {
 	existingGame.ReleaseDate = remoteGame.ReleaseDate
 	existingGame.CachedAt = time.Now()
 
-	existingGame.CoverURL = remoteGame.CoverURL
-	if remoteGame.CoverURL != "" {
-		go s.asyncDownloadCoverImage(existingGame.ID, existingGame.Name, remoteGame.CoverURL)
-	}
+	existingGame.CoverURL = remoteCoverURL
 
 	if err := s.UpdateGame(existingGame); err != nil {
-		return fmt.Errorf("failed to update game: %w", err)
+		return "", fmt.Errorf("failed to update game: %w", err)
+	}
+
+	if downloadCoverImmediately && remoteCoverURL != "" {
+		go s.asyncDownloadCoverImage(existingGame.ID, existingGame.Name, remoteCoverURL, true)
 	}
 
 	// 写入 tags（先删除刮削来源的旧 tag，再批量插入新 tag，保留用户 tag）
@@ -990,7 +1068,23 @@ func (s *GameService) UpdateGameFromRemote(gameID string) error {
 	}
 
 	applog.LogInfof(s.ctx, "UpdateGameFromRemote: successfully updated game %s from %s", existingGame.Name, sourceType)
-	return nil
+	return remoteCoverURL, nil
+}
+
+func (s *GameService) emitMetadataRefreshProgress(result vo.MetadataRefreshResult, current int, gameName string, status string) {
+	if s.ctx == nil || s.emitEvent == nil {
+		return
+	}
+	s.emitEvent(s.ctx, "metadata:refresh-progress", map[string]interface{}{
+		"status":        status,
+		"current":       current,
+		"total":         result.TotalGames,
+		"game_name":     gameName,
+		"updated_games": result.UpdatedGames,
+		"skipped_games": result.SkippedGames,
+		"failed_games":  result.FailedGames,
+		"locked_games":  result.LockedGames,
+	})
 }
 
 func (s *GameService) RefreshAllGamesMetadata() (vo.MetadataRefreshResult, error) {
@@ -1003,32 +1097,54 @@ func (s *GameService) RefreshAllGamesMetadata() (vo.MetadataRefreshResult, error
 
 	result.TotalGames = len(games)
 	enabledSources := s.getConfiguredMetadataSourceSet()
+	imageItems := make([]CoverImageDownloadItem, 0)
+	s.emitMetadataRefreshProgress(result, 0, "", "started")
 
-	for _, game := range games {
+	for index, game := range games {
+		current := index + 1
+		s.emitMetadataRefreshProgress(result, current, game.Name, "running")
+
 		if game.MetadataLocked {
 			result.SkippedGames++
 			result.LockedGames++
+			s.emitMetadataRefreshProgress(result, current, game.Name, "running")
 			continue
 		}
 
 		if game.SourceType == "" || game.SourceType == enums2.Local || strings.TrimSpace(game.SourceID) == "" {
 			result.SkippedGames++
+			s.emitMetadataRefreshProgress(result, current, game.Name, "running")
 			continue
 		}
 
 		if _, enabled := enabledSources[normalizeMetadataSourceType(game.SourceType)]; !enabled {
 			result.SkippedGames++
+			s.emitMetadataRefreshProgress(result, current, game.Name, "running")
 			continue
 		}
 
-		if err := s.UpdateGameFromRemote(game.ID); err != nil {
+		remoteCoverURL, err := s.updateGameMetadataFromRemote(game.ID, false)
+		if err != nil {
 			result.FailedGames++
 			applog.LogWarningf(s.ctx, "RefreshAllGamesMetadata: failed to update game %s (%s): %v", game.Name, game.ID, err)
 		} else {
 			result.UpdatedGames++
+			if remoteCoverURL != "" {
+				imageItems = append(imageItems, CoverImageDownloadItem{
+					GameID:   game.ID,
+					GameName: game.Name,
+					CoverURL: remoteCoverURL,
+				})
+			}
 		}
 
+		s.emitMetadataRefreshProgress(result, current, game.Name, "running")
 	}
+
+	if len(imageItems) > 0 && s.imageTaskStarter != nil {
+		s.imageTaskStarter(imageItems)
+	}
+	s.emitMetadataRefreshProgress(result, result.TotalGames, "", "done")
 
 	return result, nil
 }

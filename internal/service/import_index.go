@@ -799,7 +799,7 @@ func (s *ImportService) startImportCoverProcessing(items []importItem) {
 
 func (s *ImportService) processImportCover(item importItem) {
 	if item.Game.CoverURL != "" {
-		s.gameService.asyncDownloadCoverImage(item.Game.ID, item.Game.Name, item.Game.CoverURL)
+		s.gameService.asyncDownloadCoverImage(item.Game.ID, item.Game.Name, item.Game.CoverURL, false)
 	}
 	if item.CoverLoader == nil {
 		return

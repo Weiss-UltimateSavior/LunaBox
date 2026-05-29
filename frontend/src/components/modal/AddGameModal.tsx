@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "react-hot-toast";
 import { useTranslation } from "react-i18next";
 import { enums, models, vo } from "../../../wailsjs/go/models";
@@ -43,6 +43,37 @@ export function AddGameModal({
   const [manualCoverUrl, setManualCoverUrl] = useState("");
   const [manualCompany, setManualCompany] = useState("");
   const [manualSummary, setManualSummary] = useState("");
+  const resultsScrollerRef = useRef<HTMLDivElement | null>(null);
+  const [canScrollResultsPrev, setCanScrollResultsPrev] = useState(false);
+  const [canScrollResultsNext, setCanScrollResultsNext] = useState(false);
+
+  useEffect(() => {
+    const scroller = resultsScrollerRef.current;
+    if (!isOpen || step !== "results" || !scroller) {
+      setCanScrollResultsPrev(false);
+      setCanScrollResultsNext(false);
+      return;
+    }
+
+    const updateScrollState = () => {
+      const maxScrollLeft = scroller.scrollWidth - scroller.clientWidth;
+      setCanScrollResultsPrev(scroller.scrollLeft > 2);
+      setCanScrollResultsNext(scroller.scrollLeft < maxScrollLeft - 2);
+    };
+
+    updateScrollState();
+    scroller.addEventListener("scroll", updateScrollState, { passive: true });
+    window.addEventListener("resize", updateScrollState);
+
+    const resizeObserver = new ResizeObserver(updateScrollState);
+    resizeObserver.observe(scroller);
+
+    return () => {
+      scroller.removeEventListener("scroll", updateScrollState);
+      window.removeEventListener("resize", updateScrollState);
+      resizeObserver.disconnect();
+    };
+  }, [isOpen, metadataResults.length, step]);
 
   if (!isOpen)
     return null;
@@ -98,7 +129,7 @@ export function AddGameModal({
 
   const handleSelectExecutable = async () => {
     try {
-      const path = await SelectGameExecutable();
+      const path = await SelectGameExecutable(executablePath);
       if (path) {
         setExecutablePath(path);
         const normalizedPath = path.replace(/\\/g, "/");
@@ -257,6 +288,17 @@ export function AddGameModal({
       </div>
     </>
   );
+
+  const scrollResults = (direction: -1 | 1) => {
+    const scroller = resultsScrollerRef.current;
+    if (!scroller)
+      return;
+
+    scroller.scrollBy({
+      behavior: "smooth",
+      left: direction * Math.max(scroller.clientWidth - 96, 240),
+    });
+  };
 
   return (
     <ModalPortal>
@@ -485,42 +527,91 @@ export function AddGameModal({
                 {t("addGameModal.whichResult")}
               </p>
 
-              <div className="flex w-full snap-x gap-4 overflow-x-auto p-2 pb-6 pt-2 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-                {metadataResults
-                  .filter(item => item.Game)
-                  .map((item, index) => (
-                    <div
-                      key={index}
-                      onClick={() => saveGameFromWebMetadata(item)}
-                      className="w-36 shrink-0 snap-center cursor-pointer rounded-xl border border-brand-200 bg-brand-50/50 p-3 shadow-sm transition-all hover:-translate-y-1 hover:border-brand-400 hover:shadow-md dark:border-brand-700 dark:bg-brand-800/50 dark:hover:border-brand-500 sm:w-40"
-                    >
-                      <div className="aspect-[3/4] w-full overflow-hidden rounded-md bg-brand-200 dark:bg-brand-700">
-                        {item.Game!.cover_url ? (
-                          <img
-                            src={item.Game!.cover_url}
-                            alt={item.Game!.name}
-                            className="h-full w-full object-cover"
-                            referrerPolicy="no-referrer"
-                            draggable="false"
-                            onDragStart={e => e.preventDefault()}
-                          />
-                        ) : (
-                          <div className="flex h-full items-center justify-center text-brand-400">
-                            <div className="i-mdi-image-off text-4xl" />
-                          </div>
-                        )}
-                      </div>
-                      <h3
-                        className="mt-2 truncate text-sm font-bold text-brand-900 dark:text-white"
-                        title={item.Game!.name}
+              <div className="relative">
+                <div
+                  ref={resultsScrollerRef}
+                  className="flex w-full snap-x gap-4 overflow-x-auto p-2 pb-6 pt-2 scroll-smooth [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
+                >
+                  {metadataResults
+                    .filter(item => item.Game)
+                    .map((item, index) => (
+                      <div
+                        key={index}
+                        onClick={() => saveGameFromWebMetadata(item)}
+                        className="w-36 shrink-0 snap-center cursor-pointer rounded-xl border border-brand-200 bg-brand-50/50 p-3 shadow-sm transition-all hover:-translate-y-1 hover:border-brand-400 hover:shadow-md dark:border-brand-700 dark:bg-brand-800/50 dark:hover:border-brand-500 sm:w-40"
                       >
-                        {item.Game!.name}
-                      </h3>
-                      <p className="text-xs text-brand-500 dark:text-brand-400">
-                        {t("addGameModal.fromSource", { source: item.Source })}
-                      </p>
-                    </div>
-                  ))}
+                        <div className="aspect-[3/4] w-full overflow-hidden rounded-md bg-brand-200 dark:bg-brand-700">
+                          {item.Game!.cover_url ? (
+                            <img
+                              src={item.Game!.cover_url}
+                              alt={item.Game!.name}
+                              className="h-full w-full object-cover"
+                              referrerPolicy="no-referrer"
+                              draggable="false"
+                              onDragStart={e => e.preventDefault()}
+                            />
+                          ) : (
+                            <div className="flex h-full items-center justify-center text-brand-400">
+                              <div className="i-mdi-image-off text-4xl" />
+                            </div>
+                          )}
+                        </div>
+                        <h3
+                          className="mt-2 truncate text-sm font-bold text-brand-900 dark:text-white"
+                          title={item.Game!.name}
+                        >
+                          {item.Game!.name}
+                        </h3>
+                        <p className="text-xs text-brand-500 dark:text-brand-400">
+                          {t("addGameModal.fromSource", {
+                            source: item.Source,
+                          })}
+                        </p>
+                      </div>
+                    ))}
+                </div>
+
+                {canScrollResultsPrev && (
+                  <button
+                    type="button"
+                    onClick={() => scrollResults(-1)}
+                    aria-label={t(
+                      "addGameModal.scrollResultsPrev",
+                      "向前查看更多结果",
+                    )}
+                    title={t(
+                      "addGameModal.scrollResultsPrev",
+                      "向前查看更多结果",
+                    )}
+                    className="absolute left-0 top-1/2 z-10 flex h-16 w-10 -translate-y-1/2 items-center justify-center rounded-r-xl bg-white/40 text-brand-700 opacity-75 shadow-lg backdrop-blur-md transition hover:bg-white/65 hover:opacity-100 dark:bg-black/35 dark:text-brand-200 dark:hover:bg-black/55"
+                  >
+                    <span
+                      className="i-mdi-chevron-left text-3xl"
+                      aria-hidden="true"
+                    />
+                  </button>
+                )}
+
+                {canScrollResultsNext && (
+                  <button
+                    type="button"
+                    onClick={() => scrollResults(1)}
+                    aria-label={t(
+                      "addGameModal.scrollResultsNext",
+                      "向后查看更多结果",
+                    )}
+                    title={t(
+                      "addGameModal.scrollResultsNext",
+                      "向后查看更多结果",
+                    )}
+                    className="absolute right-0 top-1/2 z-10 flex h-16 w-10 -translate-y-1/2 items-center justify-center rounded-l-xl bg-white/40 text-brand-700 opacity-75 shadow-lg backdrop-blur-md transition hover:bg-white/65 hover:opacity-100 dark:bg-black/35 dark:text-brand-200 dark:hover:bg-black/55"
+                  >
+                    <span
+                      className="i-mdi-chevron-right text-3xl"
+                      aria-hidden="true"
+                    />
+                  </button>
+                )}
               </div>
 
               <div className="flex items-center justify-between border-t border-brand-200 pt-4 dark:border-brand-700">

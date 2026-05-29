@@ -54,6 +54,10 @@ export function SetPendingInstall(arg1) {
   return window['go']['service']['DownloadService']['SetPendingInstall'](arg1);
 }
 
+export function StartCoverImageDownloadTask(arg1) {
+  return window['go']['service']['DownloadService']['StartCoverImageDownloadTask'](arg1);
+}
+
 export function StartDownload(arg1) {
   return window['go']['service']['DownloadService']['StartDownload'](arg1);
 }

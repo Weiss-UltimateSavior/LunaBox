@@ -142,7 +142,7 @@ function GameDetailPage() {
 
   const handleSelectExecutable = async () => {
     try {
-      const path = await SelectGameExecutable();
+      const path = await SelectGameExecutable(game.path || "");
       if (path && game) {
         setGame({ ...game, path } as models.Game);
       }
@@ -346,7 +346,7 @@ function GameDetailPage() {
 
   const handleSelectProcessExecutable = async () => {
     try {
-      const path = await SelectGameExecutable();
+      const path = await SelectGameExecutable(game.path || "");
       if (path && game) {
         // 从路径中提取文件名
         const filename = path.split(/[\\/]/).pop();

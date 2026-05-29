@@ -14,6 +14,7 @@ import { UpdateDialog } from "./components/ui/UpdateDialog";
 import { useAppRuntimeEffects } from "./hooks/useAppRuntimeEffects";
 import { useAppTheme } from "./hooks/useAppTheme";
 import { useAppZoom } from "./hooks/useAppZoom";
+import { useCoverImageDownloadNotifications } from "./hooks/useCoverImageDownloadNotifications";
 import { useDownloadNotifications } from "./hooks/useDownloadNotifications";
 import { useExitSyncToast } from "./hooks/useExitSyncToast";
 import { useUpdateCheck } from "./hooks/useUpdateCheck";
@@ -107,6 +108,7 @@ function App() {
   });
   useExitSyncToast({ quitSyncRequest });
   useDownloadNotifications(i18n);
+  useCoverImageDownloadNotifications(i18n);
 
   return (
     <>

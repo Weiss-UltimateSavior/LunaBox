@@ -1,9 +1,15 @@
 import type { appconf, vo } from "../../../wailsjs/go/models";
-import { useState } from "react";
+import type { MetadataRefreshProgress } from "../modal/MetadataRefreshProgressModal";
+import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
 import { useTranslation } from "react-i18next";
 import { RefreshAllGamesMetadata } from "../../../wailsjs/go/service/GameService";
+import { EventsOn } from "../../../wailsjs/runtime/runtime";
 import { ConfirmModal } from "../modal/ConfirmModal";
+import {
+
+  MetadataRefreshProgressModal,
+} from "../modal/MetadataRefreshProgressModal";
 import { BetterButton } from "../ui/better/BetterButton";
 import { BetterSwitch } from "../ui/better/BetterSwitch";
 
@@ -41,6 +47,17 @@ export function MetadataSettingsPanel({
 }: MetadataSettingsPanelProps) {
   const { t } = useTranslation();
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [refreshProgress, setRefreshProgress]
+    = useState<MetadataRefreshProgress>({
+      status: "idle",
+      current: 0,
+      total: 0,
+      game_name: "",
+      updated_games: 0,
+      skipped_games: 0,
+      failed_games: 0,
+      locked_games: 0,
+    });
   const [confirmConfig, setConfirmConfig] = useState<{
     isOpen: boolean;
     title: string;
@@ -61,6 +78,17 @@ export function MetadataSettingsPanel({
       ? Math.max(0, formData.scraped_tag_limit)
       : DEFAULT_SCRAPED_TAG_LIMIT;
   const isTagLimitUnlimited = scrapedTagLimit === 0;
+
+  useEffect(() => {
+    const unsubscribe = EventsOn(
+      "metadata:refresh-progress",
+      (evt: MetadataRefreshProgress) => {
+        setRefreshProgress(evt);
+      },
+    );
+
+    return unsubscribe;
+  }, []);
 
   const sourceItems: Array<{
     value: string;
@@ -140,6 +168,16 @@ export function MetadataSettingsPanel({
       type: "danger",
       onConfirm: async () => {
         setIsRefreshing(true);
+        setRefreshProgress({
+          status: "started",
+          current: 0,
+          total: 0,
+          game_name: "",
+          updated_games: 0,
+          skipped_games: 0,
+          failed_games: 0,
+          locked_games: 0,
+        });
         try {
           const refreshResult: vo.MetadataRefreshResult
             = await RefreshAllGamesMetadata();
@@ -338,6 +376,10 @@ export function MetadataSettingsPanel({
         type={confirmConfig.type}
         onClose={() => setConfirmConfig({ ...confirmConfig, isOpen: false })}
         onConfirm={confirmConfig.onConfirm}
+      />
+      <MetadataRefreshProgressModal
+        isOpen={isRefreshing}
+        progress={refreshProgress}
       />
     </>
   );

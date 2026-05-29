@@ -14,6 +14,7 @@ import (
 	"lunabox/internal/utils/apputils"
 	"lunabox/internal/utils/archiveutils"
 	"lunabox/internal/utils/downloadutils"
+	"lunabox/internal/utils/imageutils"
 	"os"
 	"path/filepath"
 	"strings"
@@ -23,6 +24,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
+
+const imageDownloadSource = "cover-image-batch"
 
 // DownloadStatus 下载状态
 type DownloadStatus string
@@ -142,6 +145,40 @@ func (s *DownloadService) StartDownload(req vo.InstallRequest) (string, error) {
 	return taskID, nil
 }
 
+// StartCoverImageDownloadTask creates a lightweight download-management task for batch cover caching.
+func (s *DownloadService) StartCoverImageDownloadTask(items []CoverImageDownloadItem) string {
+	normalized := normalizeCoverImageDownloadItems(items)
+	if len(normalized) == 0 {
+		return ""
+	}
+
+	taskID := uuid.New().String()
+	ctx, cancel := context.WithCancel(s.ctx)
+	task := &DownloadTask{
+		ID: taskID,
+		Request: vo.InstallRequest{
+			Title:          "批量下载游戏图片",
+			DownloadSource: imageDownloadSource,
+			FileName:       "cover-images",
+			ArchiveFormat:  "none",
+			Size:           int64(len(normalized)),
+			ExpiresAt:      time.Now().Add(24 * time.Hour).Unix(),
+		},
+		Status:    DownloadStatusPending,
+		Total:     int64(len(normalized)),
+		cancel:    cancel,
+		cancelReq: false,
+	}
+
+	s.mu.Lock()
+	s.tasks[taskID] = task
+	s.mu.Unlock()
+	s.emitProgress(task)
+
+	go s.runCoverImageDownloadTask(ctx, task, normalized)
+	return taskID
+}
+
 // CancelDownload 取消指定任务
 func (s *DownloadService) CancelDownload(taskID string) error {
 	s.mu.Lock()
@@ -219,6 +256,10 @@ func (s *DownloadService) ResumeDownload(taskID string) error {
 		s.mu.Unlock()
 		return fmt.Errorf("task %s is not paused", taskID)
 	}
+	if task.Request.DownloadSource == imageDownloadSource {
+		s.mu.Unlock()
+		return fmt.Errorf("image download task cannot be resumed")
+	}
 	ctx := s.requeueTaskLocked(task)
 	s.mu.Unlock()
 	s.emitProgress(task)
@@ -237,6 +278,10 @@ func (s *DownloadService) RetryDownload(taskID string) error {
 	if task.Status != DownloadStatusError {
 		s.mu.Unlock()
 		return fmt.Errorf("task %s is not retryable", taskID)
+	}
+	if task.Request.DownloadSource == imageDownloadSource {
+		s.mu.Unlock()
+		return fmt.Errorf("image download task cannot be retried")
 	}
 	ctx := s.requeueTaskLocked(task)
 	s.mu.Unlock()
@@ -360,6 +405,9 @@ func (s *DownloadService) ImportDownloadTaskAsGame(taskID string) error {
 	}
 	if task.Status != DownloadStatusDone {
 		return fmt.Errorf("task %s is not completed", taskID)
+	}
+	if task.Request.DownloadSource == imageDownloadSource {
+		return fmt.Errorf("image download task cannot be imported as game")
 	}
 	if strings.TrimSpace(task.FilePath) == "" {
 		return fmt.Errorf("task %s has no file path", taskID)
@@ -516,6 +564,82 @@ func (s *DownloadService) runDownload(ctx context.Context, task *DownloadTask) {
 	// 先抓取元数据，再把元数据用于自动创建/更新游戏记录
 	metadata := s.fetchMetadataForTask(task)
 	s.autoCreateOrUpdateGame(task, finalPath, metadata)
+}
+
+func (s *DownloadService) runCoverImageDownloadTask(ctx context.Context, task *DownloadTask, items []CoverImageDownloadItem) {
+	applog.LogInfof(s.ctx, "Cover image batch download started: %s count=%d", task.ID, len(items))
+	s.mu.Lock()
+	task.Status = DownloadStatusDownloading
+	task.Progress = 0
+	task.Downloaded = 0
+	task.Total = int64(len(items))
+	task.Error = ""
+	s.mu.Unlock()
+	s.emitProgress(task)
+
+	success := 0
+	failed := 0
+	for index, item := range items {
+		select {
+		case <-ctx.Done():
+			if s.isTaskPauseRequested(task) {
+				s.markTaskPaused(task)
+				return
+			}
+			s.cancelTaskAndCleanup(task)
+			return
+		default:
+		}
+
+		if ok := s.downloadAndUpdateCoverImage(item); ok {
+			success++
+		} else {
+			failed++
+		}
+
+		downloaded := int64(index + 1)
+		progress := float64(downloaded) / float64(len(items)) * 100
+		s.mu.Lock()
+		task.Downloaded = downloaded
+		task.Progress = progress
+		if failed > 0 {
+			task.Error = fmt.Sprintf("success=%d failed=%d", success, failed)
+		}
+		s.mu.Unlock()
+		s.emitProgress(task)
+	}
+
+	s.mu.Lock()
+	task.Status = DownloadStatusDone
+	task.Progress = 100
+	task.Downloaded = int64(len(items))
+	task.Total = int64(len(items))
+	if failed > 0 {
+		task.Error = fmt.Sprintf("success=%d failed=%d", success, failed)
+	} else {
+		task.Error = ""
+	}
+	s.mu.Unlock()
+	s.emitProgress(task)
+	applog.LogInfof(s.ctx, "Cover image batch download complete: %s success=%d failed=%d", task.ID, success, failed)
+}
+
+func (s *DownloadService) downloadAndUpdateCoverImage(item CoverImageDownloadItem) bool {
+	if strings.TrimSpace(item.GameID) == "" || strings.TrimSpace(item.CoverURL) == "" {
+		return false
+	}
+	localPath, err := imageutils.DownloadAndSaveCoverImageWithProxyConfig(item.CoverURL, item.GameID, s.config)
+	if err != nil {
+		applog.LogWarningf(s.ctx, "cover image batch download failed for %s: %v", item.GameName, err)
+		return false
+	}
+	if s.gameService != nil {
+		if err := s.gameService.updateCoverURL(item.GameID, localPath); err != nil {
+			applog.LogWarningf(s.ctx, "cover image batch update failed for %s: %v", item.GameName, err)
+			return false
+		}
+	}
+	return true
 }
 
 func (s *DownloadService) failTask(task *DownloadTask, msg string) {
@@ -886,6 +1010,10 @@ func parseMetaSource(metaSource string) (enums2.SourceType, bool) {
 		return enums2.Ymgal, true
 	case string(enums2.Steam):
 		return enums2.Steam, true
+	case string(enums2.DLsite):
+		return enums2.DLsite, true
+	case string(enums2.ErogameScape):
+		return enums2.ErogameScape, true
 	default:
 		return enums2.Local, false
 	}
@@ -1118,6 +1246,29 @@ func (s *DownloadService) requeueTaskLocked(task *DownloadTask) context.Context 
 	task.pauseReq = false
 	task.cancelReq = false
 	return ctx
+}
+
+func normalizeCoverImageDownloadItems(items []CoverImageDownloadItem) []CoverImageDownloadItem {
+	normalized := make([]CoverImageDownloadItem, 0, len(items))
+	seen := make(map[string]struct{})
+	for _, item := range items {
+		gameID := strings.TrimSpace(item.GameID)
+		coverURL := strings.TrimSpace(item.CoverURL)
+		if gameID == "" || !strings.HasPrefix(coverURL, "http") || strings.Contains(coverURL, "wails.localhost") {
+			continue
+		}
+		key := gameID + "\x00" + coverURL
+		if _, exists := seen[key]; exists {
+			continue
+		}
+		seen[key] = struct{}{}
+		normalized = append(normalized, CoverImageDownloadItem{
+			GameID:   gameID,
+			GameName: strings.TrimSpace(item.GameName),
+			CoverURL: coverURL,
+		})
+	}
+	return normalized
 }
 
 func collapseSingleRootDirectory(dir string) (string, bool) {

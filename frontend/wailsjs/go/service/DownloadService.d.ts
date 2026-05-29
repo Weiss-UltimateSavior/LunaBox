@@ -32,4 +32,6 @@ export function SetGameService(arg1:service.GameService):Promise<void>;
 
 export function SetPendingInstall(arg1:vo.InstallRequest):Promise<void>;
 
+export function StartCoverImageDownloadTask(arg1:Array<service.CoverImageDownloadItem>):Promise<string>;
+
 export function StartDownload(arg1:vo.InstallRequest):Promise<string>;

@@ -168,6 +168,9 @@ function DownloadsPage() {
     if (!task) {
       return;
     }
+    if (task.request.download_source === "cover-image-batch") {
+      return;
+    }
     if (!task.file_path) {
       toast.error(t("downloads.toast.noFilePath", "下载文件路径不存在"));
       return;

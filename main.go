@@ -612,6 +612,7 @@ func main() {
 			startService.SetGameService(gameService)
 			startService.SetSessionService(sessionService)
 			downloadService.SetGameService(gameService)
+			gameService.SetImageDownloadTaskStarter(downloadService.StartCoverImageDownloadTask)
 			gameService.SetTagService(tagService)
 			gameService.SetBangumiService(bangumiService)
 			importService.SetBangumiService(bangumiService)

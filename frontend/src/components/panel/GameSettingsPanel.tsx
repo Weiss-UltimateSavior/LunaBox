@@ -18,7 +18,9 @@ export function GameSettingsPanel({
 
   const handleSelectLocaleEmulatorPath = async () => {
     try {
-      const path = await SelectGameExecutable();
+      const path = await SelectGameExecutable(
+        formData.locale_emulator_path || "",
+      );
       if (path) {
         onChange({
           ...formData,
@@ -34,7 +36,7 @@ export function GameSettingsPanel({
 
   const handleSelectMagpiePath = async () => {
     try {
-      const path = await SelectGameExecutable();
+      const path = await SelectGameExecutable(formData.magpie_path || "");
       if (path) {
         onChange({ ...formData, magpie_path: path } as appconf.AppConfig);
       }
