@@ -9,6 +9,8 @@ export function AddUserTag(arg1:string,arg2:string):Promise<void>;
 
 export function DeleteTag(arg1:string):Promise<void>;
 
+export function FilterExistingTagNames(arg1:Array<string>):Promise<Array<string>>;
+
 export function GetGameIDsByTag(arg1:string):Promise<Array<string>>;
 
 export function GetTagsByGame(arg1:string):Promise<Array<models.GameTag>>;

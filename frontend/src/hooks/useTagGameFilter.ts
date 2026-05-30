@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import {
+  FilterExistingTagNames,
   GetGameIDsByTag,
   SearchTagsInLibrary,
 } from "../../wailsjs/go/service/TagService";
@@ -32,30 +33,51 @@ export function useTagGameFilter({
   const [tagGameIds, setTagGameIds] = useState<Set<string> | null>(null);
 
   useEffect(() => {
-    if (!tagInput) {
+    const normalizedInput = tagInput.trim();
+    if (!normalizedInput) {
       setTagSuggestions([]);
       return;
     }
-    SearchTagsInLibrary(tagInput)
-      .then((names) => {
+
+    let cancelled = false;
+    const loadTagSuggestions = async () => {
+      try {
+        const names = await SearchTagsInLibrary(normalizedInput);
         const rawNames = Array.isArray(names) ? names : [];
         const translatedMatches = enableTagTranslation
-          ? findRawTagNamesByTranslatedQuery(tagInput)
+          ? findRawTagNamesByTranslatedQuery(normalizedInput)
           : [];
-        const mergedNames = [...new Set([...rawNames, ...translatedMatches])];
+        const existingTranslatedMatches
+          = translatedMatches.length > 0
+            ? await FilterExistingTagNames(translatedMatches)
+            : [];
+        if (cancelled) {
+          return;
+        }
+        const mergedNames = [
+          ...new Set([...rawNames, ...existingTranslatedMatches]),
+        ];
         setTagSuggestions(
           filterTagNamesByDisplayQuery(
             mergedNames,
-            tagInput,
+            normalizedInput,
             enableTagTranslation,
           )
             .filter(name => !selectedTags.includes(name))
             .slice(0, 50),
         );
-      })
-      .catch(() => {
-        setTagSuggestions([]);
-      });
+      }
+      catch {
+        if (!cancelled) {
+          setTagSuggestions([]);
+        }
+      }
+    };
+
+    void loadTagSuggestions();
+    return () => {
+      cancelled = true;
+    };
   }, [enableTagTranslation, tagInput, selectedTags]);
 
   const updateTagGameIds = useCallback(async (tags: string[]) => {

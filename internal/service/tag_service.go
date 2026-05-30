@@ -7,7 +7,9 @@ import (
 	"lunabox/internal/appconf"
 	"lunabox/internal/applog"
 	"lunabox/internal/models"
+	"lunabox/internal/utils"
 	"lunabox/internal/utils/metadata"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -145,6 +147,60 @@ func (s *TagService) SearchTagsInLibrary(query string) ([]string, error) {
 		names = append(names, name)
 	}
 	return names, rows.Err()
+}
+
+// FilterExistingTagNames 返回输入中已经存在于库内的 tag 名称，保留输入顺序。
+func (s *TagService) FilterExistingTagNames(names []string) ([]string, error) {
+	candidates := make([]string, 0, len(names))
+	seen := make(map[string]struct{}, len(names))
+	for _, name := range names {
+		normalizedName := strings.TrimSpace(name)
+		if normalizedName == "" {
+			continue
+		}
+		if _, exists := seen[normalizedName]; exists {
+			continue
+		}
+		seen[normalizedName] = struct{}{}
+		candidates = append(candidates, normalizedName)
+	}
+	if len(candidates) == 0 {
+		return []string{}, nil
+	}
+
+	args := make([]interface{}, 0, len(candidates))
+	for _, name := range candidates {
+		args = append(args, name)
+	}
+
+	rows, err := s.db.QueryContext(s.ctx, fmt.Sprintf(`
+		SELECT DISTINCT name FROM game_tags
+		WHERE name IN (%s)
+	`, utils.BuildPlaceholders(len(candidates))), args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to filter existing tag names: %w", err)
+	}
+	defer rows.Close()
+
+	existing := make(map[string]struct{}, len(candidates))
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return nil, err
+		}
+		existing[name] = struct{}{}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	result := make([]string, 0, len(existing))
+	for _, name := range candidates {
+		if _, exists := existing[name]; exists {
+			result = append(result, name)
+		}
+	}
+	return result, nil
 }
 
 // GetGameIDsByTag 获取包含指定 tag 的所有游戏 ID（用于游戏库筛选）

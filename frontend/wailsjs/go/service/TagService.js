@@ -10,6 +10,10 @@ export function DeleteTag(arg1) {
   return window['go']['service']['TagService']['DeleteTag'](arg1);
 }
 
+export function FilterExistingTagNames(arg1) {
+  return window['go']['service']['TagService']['FilterExistingTagNames'](arg1);
+}
+
 export function GetGameIDsByTag(arg1) {
   return window['go']['service']['TagService']['GetGameIDsByTag'](arg1);
 }
