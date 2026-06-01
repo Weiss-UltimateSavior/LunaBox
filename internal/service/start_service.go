@@ -140,12 +140,7 @@ func (s *StartService) startGame(gameID string, options LaunchOptions) (bool, er
 		return false, fmt.Errorf("failed to get game path: %w", err)
 	}
 
-	if path == "" {
-		applog.LogErrorf(s.ctx, "game path is empty for game: %s", gameID)
-		return false, fmt.Errorf("game path is empty for game: %s", gameID)
-	}
-
-	// 如果配置的是文件夹，则在首次启动时要求用户选择可执行文件并写回游戏路径
+	// 如果未配置路径或配置的是文件夹，则在首次启动时要求用户选择可执行文件并写回游戏路径
 	resolvedPath, resolvedProcessName, cancelled, err := s.resolveExecutablePath(gameID, path, processName)
 	if err != nil {
 		applog.LogErrorf(s.ctx, "failed to resolve executable path: %v", err)
@@ -821,6 +816,9 @@ func (s *StartService) autoBackupGameSave(gameID string) {
 
 // getGamePathAndProcess 获取游戏路径和已保存的进程名
 func (s *StartService) getGamePathAndProcess(gameID string) (path string, processName string, err error) {
+	if s.gameService == nil {
+		return "", "", fmt.Errorf("game service is not initialized")
+	}
 	game, err := s.gameService.GetGameByID(gameID)
 	if err != nil {
 		return "", "", err
@@ -828,11 +826,16 @@ func (s *StartService) getGamePathAndProcess(gameID string) (path string, proces
 	return game.Path, game.ProcessName, nil
 }
 
-// resolveExecutablePath 当路径是目录时，引导用户选择可执行文件并保存到游戏配置
+// resolveExecutablePath 当路径为空或路径是目录时，引导用户选择可执行文件并保存到游戏配置
 func (s *StartService) resolveExecutablePath(gameID string, path string, processName string) (string, string, bool, error) {
 	trimmedPath := strings.TrimSpace(path)
 	if trimmedPath == "" {
-		return "", "", false, fmt.Errorf("game path is empty")
+		applog.LogInfof(s.ctx, "game path is empty for game %s, prompting executable selection", gameID)
+		selection, err := s.gameService.SelectGameExecutable("")
+		if err != nil {
+			return "", "", false, fmt.Errorf("open executable dialog failed: %w", err)
+		}
+		return s.saveSelectedExecutablePath(gameID, selection, processName)
 	}
 
 	normalizedPath, err := filepath.Abs(filepath.Clean(trimmedPath))
@@ -856,7 +859,19 @@ func (s *StartService) resolveExecutablePath(gameID string, path string, process
 		return "", "", true, nil
 	}
 
+	return s.saveSelectedExecutablePath(gameID, selection, processName)
+}
+
+func (s *StartService) saveSelectedExecutablePath(gameID string, selection string, processName string) (string, string, bool, error) {
+	if s.gameService == nil {
+		return "", "", false, fmt.Errorf("game service is not initialized")
+	}
+
 	selection = strings.TrimSpace(selection)
+	if selection == "" {
+		return "", "", true, nil
+	}
+
 	resolvedSelection, err := filepath.Abs(filepath.Clean(selection))
 	if err != nil {
 		return "", "", false, fmt.Errorf("normalize selected executable failed: %w", err)

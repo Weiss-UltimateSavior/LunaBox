@@ -289,6 +289,14 @@ function GameDetailPage() {
     try {
       const started = await StartGameWithTracking(game.id);
       if (started) {
+        try {
+          const updatedGame = await GetGameByID(game.id);
+          setGame(updatedGame);
+          originalGameData.current = updatedGame;
+        }
+        catch (refreshError) {
+          console.error("Failed to refresh game after start:", refreshError);
+        }
         toast.success(t("gameCard.startSuccess", { name: game.name }));
       }
       else {
